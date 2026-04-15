@@ -79,6 +79,7 @@ export interface ScoreState {
   winner: string
   finalScoreA: number
   finalScoreB: number
+  quarterLines: number[] // ダブルタップで手動設定するQ区切り線（得点値）
 }
 
 const initialPlayer = (): Player => ({
@@ -145,6 +146,7 @@ const initialState: ScoreState = {
   winner: "",
   finalScoreA: 0,
   finalScoreB: 0,
+  quarterLines: [],
 }
 
 interface ScoreContextType {
@@ -165,6 +167,7 @@ interface ScoreContextType {
   resetState: () => void
   getQuarterScore: (team: "A" | "B", quarter: number) => number
   getTotalScore: (team: "A" | "B") => number
+  toggleQuarterLine: (score: number) => void
 }
 
 const ScoreContext = createContext<ScoreContextType | undefined>(undefined)
@@ -349,6 +352,15 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
     setState(initialState)
   }
 
+  const toggleQuarterLine = (score: number) => {
+    setState((prev) => ({
+      ...prev,
+      quarterLines: prev.quarterLines.includes(score)
+        ? prev.quarterLines.filter((s) => s !== score)
+        : [...prev.quarterLines, score].sort((a, b) => a - b),
+    }))
+  }
+
   const getQuarterScore = (team: "A" | "B", quarter: number): number => {
     const entries = state.scoreEntries.filter(
       (e) => e.team === team && e.quarter === quarter
@@ -389,6 +401,7 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
         resetState,
         getQuarterScore,
         getTotalScore,
+        toggleQuarterLine,
       }}
     >
       {children}
