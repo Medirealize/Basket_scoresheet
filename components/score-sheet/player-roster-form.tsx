@@ -125,13 +125,14 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                   {/* 背番号 */}
                   <div className="relative shrink-0">
                     <Input
-                      type="number"
-                      min={0}
-                      max={99}
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]*"
+                      maxLength={2}
                       placeholder="-"
-                      className="w-12 text-center h-8 text-sm font-bold px-1"
+                      className="w-12 text-center h-8 text-sm font-bold px-1 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
                       value={player.number}
-                      onChange={(e) => updatePlayer(team, index, { number: e.target.value })}
+                      onChange={(e) => updatePlayer(team, index, { number: e.target.value.replace(/\D/g, "").slice(0, 2) })}
                       onClick={(e) => e.stopPropagation()}
                     />
                     {player.isCaptain && (

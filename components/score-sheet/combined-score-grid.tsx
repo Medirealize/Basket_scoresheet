@@ -173,12 +173,14 @@ export function CombinedScoreGrid() {
   const renderPlayerNumber = (
     entry: { playerNumber: string; quarter: number; isThreePointer: boolean } | undefined
   ) => {
-    if (!entry) return <span className="text-transparent">-</span>
-    
+    if (!entry) return <span className="text-transparent select-none">-</span>
+
     return (
-      <span className={cn("text-xs font-bold", getQuarterTextColor(entry.quarter))}>
+      <span className={cn("text-[10px] font-bold whitespace-nowrap leading-none", getQuarterTextColor(entry.quarter))}>
         {entry.isThreePointer ? (
-          <span className="border-2 border-current rounded-full px-1">{entry.playerNumber}</span>
+          <span className="border border-current rounded-full inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-0.5 leading-none">
+            {entry.playerNumber}
+          </span>
         ) : (
           entry.playerNumber
         )}

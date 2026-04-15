@@ -106,9 +106,9 @@ export function RunningScore({ team }: RunningScoreProps) {
               得点を追加
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-sm">
+          <DialogContent className="w-[calc(100vw-2rem)] max-w-sm">
             <DialogHeader>
-              <DialogTitle>得点追加 - {teamData.name || `チーム${team}`}</DialogTitle>
+              <DialogTitle className="truncate">得点追加 - {teamData.name || `チーム${team}`}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
               {/* 選手選択 */}
@@ -129,19 +129,19 @@ export function RunningScore({ team }: RunningScoreProps) {
               </div>
 
               {/* 得点ボタン */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-3 gap-2">
                 <Button
                   variant="outline"
-                  className="h-20 text-2xl font-bold"
+                  className="h-16 text-xl font-bold flex-col gap-0.5"
                   onClick={() => handleAddScore(1)}
                   disabled={!selectedPlayer}
                 >
-                  +1
-                  <span className="text-xs text-muted-foreground ml-1">FT</span>
+                  <span>+1</span>
+                  <span className="text-[10px] text-muted-foreground font-normal">FT</span>
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-20 text-2xl font-bold"
+                  className="h-16 text-xl font-bold"
                   onClick={() => handleAddScore(2)}
                   disabled={!selectedPlayer}
                 >
@@ -149,7 +149,7 @@ export function RunningScore({ team }: RunningScoreProps) {
                 </Button>
                 <Button
                   variant="outline"
-                  className="h-20 text-2xl font-bold"
+                  className="h-16 text-xl font-bold"
                   onClick={() => handleAddScore(3)}
                   disabled={!selectedPlayer}
                 >

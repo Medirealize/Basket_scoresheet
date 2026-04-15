@@ -137,6 +137,16 @@
   body {
     @apply bg-background text-foreground;
   }
+
+  /* スピンボタンをグローバルに非表示（モバイルで2桁数字が見切れる問題を防ぐ） */
+  input[type="number"] {
+    -moz-appearance: textfield;
+  }
+  input[type="number"]::-webkit-inner-spin-button,
+  input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
 
 /* 印刷用スタイル */

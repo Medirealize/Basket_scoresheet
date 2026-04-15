@@ -42,13 +42,14 @@ export function QuarterControl() {
           </div>
 
           {/* クォーター選択 */}
-          <div className="flex justify-center gap-2">
+          <div className="flex gap-1.5">
             {quarters.map((q) => (
               <Button
                 key={q.value}
                 variant={state.currentQuarter === q.value ? "default" : "outline"}
+                size="sm"
                 className={cn(
-                  "min-w-14 font-bold",
+                  "flex-1 font-bold text-xs sm:text-sm px-1",
                   state.currentQuarter !== q.value && q.color
                 )}
                 onClick={() => setCurrentQuarter(q.value)}

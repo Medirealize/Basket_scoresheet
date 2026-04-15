@@ -164,15 +164,15 @@ export function RunningScoreGrid({ team }: RunningScoreGridProps) {
                             {/* 3ポイントの場合は丸で囲む */}
                             {entry.isThreePointer ? (
                               <span className={cn(
-                                "relative z-10 text-[10px] font-bold leading-none",
-                                "border-2 border-current rounded-full w-5 h-5 flex items-center justify-center",
+                                "relative z-10 text-[10px] font-bold leading-none whitespace-nowrap",
+                                "border border-current rounded-full inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-0.5",
                                 getQuarterTextColor(entry.quarter)
                               )}>
                                 {entry.playerNumber}
                               </span>
                             ) : (
                               <span className={cn(
-                                "relative z-10 text-[10px] font-bold leading-none",
+                                "relative z-10 text-[10px] font-bold leading-none whitespace-nowrap",
                                 getQuarterTextColor(entry.quarter)
                               )}>
                                 {entry.playerNumber}
