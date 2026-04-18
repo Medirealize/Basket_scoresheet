@@ -157,6 +157,7 @@ interface ScoreContextType {
   updateOfficials: (officials: Partial<Officials>) => void
   addScore: (team: "A" | "B", playerNumber: string, points: number, isThreePointer?: boolean) => void
   removeLastScore: (team: "A" | "B") => void
+  updateScoreEntryPlayer: (team: "A" | "B", point: number, newPlayerNumber: string) => void
   addFoul: (team: "A" | "B", playerIndex: number, foulType: FoulType) => void
   removeFoul: (team: "A" | "B", playerIndex: number) => void
   useTimeout: (team: "A" | "B", half: number, index: number, time: string, quarter: number) => void
@@ -231,6 +232,20 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
         finalScoreB: team === "B" ? newEntry.totalScore : prev.finalScoreB,
       }
     })
+  }
+
+  const updateScoreEntryPlayer = (team: "A" | "B", point: number, newPlayerNumber: string) => {
+    setState((prev) => ({
+      ...prev,
+      scoreEntries: prev.scoreEntries.map((entry) => {
+        if (entry.team !== team) return entry
+        const start = entry.totalScore - entry.points + 1
+        if (point >= start && point <= entry.totalScore) {
+          return { ...entry, playerNumber: newPlayerNumber }
+        }
+        return entry
+      }),
+    }))
   }
 
   const removeLastScore = (team: "A" | "B") => {
@@ -391,6 +406,7 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
         updateOfficials,
         addScore,
         removeLastScore,
+        updateScoreEntryPlayer,
         addFoul,
         removeFoul,
         useTimeout,

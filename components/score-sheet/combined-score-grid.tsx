@@ -4,6 +4,7 @@ import { useState, useRef } from "react"
 import { useScore } from "@/lib/score-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   Dialog,
   DialogContent,
@@ -20,25 +21,32 @@ import {
 import { cn } from "@/lib/utils"
 import { Trash2 } from "lucide-react"
 
+type ScoreEntry = { playerNumber: string; quarter: number; isThreePointer: boolean }
+
 export function CombinedScoreGrid() {
-  const { state, getTotalScore, addScore, removeLastScore, toggleQuarterLine } = useScore()
+  const { state, getTotalScore, addScore, removeLastScore, toggleQuarterLine, updateScoreEntryPlayer } = useScore()
 
-  const [dialogOpen, setDialogOpen] = useState(false)
-  const [selectedPoint, setSelectedPoint] = useState<number | null>(null)
-  const [selectedTeam, setSelectedTeam] = useState<"A" | "B" | null>(null)
-  const [selectedPlayer, setSelectedPlayer] = useState<string>("")
+  // 得点追加ダイアログ
+  const [addDialogOpen, setAddDialogOpen] = useState(false)
+  const [addPoint, setAddPoint] = useState<number | null>(null)
+  const [addTeam, setAddTeam] = useState<"A" | "B" | null>(null)
+  const [addPlayer, setAddPlayer] = useState("")
+  const [addPlayerManual, setAddPlayerManual] = useState("")
 
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
-  const [deleteTeam, setDeleteTeam] = useState<"A" | "B" | null>(null)
-  const [deletePoint, setDeletePoint] = useState<number | null>(null)
+  // 選手修正ダイアログ
+  const [editDialogOpen, setEditDialogOpen] = useState(false)
+  const [editPoint, setEditPoint] = useState<number | null>(null)
+  const [editTeam, setEditTeam] = useState<"A" | "B" | null>(null)
+  const [editPlayer, setEditPlayer] = useState("")
+  const [editPlayerManual, setEditPlayerManual] = useState("")
+  const [editIsLast, setEditIsLast] = useState(false)
 
-  // 中央セルのダブルタップ検出（Q区切り線）
+  // 中央区切りのダブルタップ（Q区切り線）
   const lastCenterTapRef = useRef<Map<number, number>>(new Map())
 
-  // 各チームの得点マップを構築
   const getScoreMap = (team: "A" | "B") => {
     const entries = state.scoreEntries.filter((e) => e.team === team)
-    const map = new Map<number, { playerNumber: string; quarter: number; isThreePointer: boolean }>()
+    const map = new Map<number, ScoreEntry>()
     entries.forEach((entry) => {
       for (let i = 0; i < entry.points; i++) {
         const pointValue = entry.totalScore - (entry.points - 1 - i)
@@ -57,11 +65,9 @@ export function CombinedScoreGrid() {
   const totalScoreA = getTotalScore("A")
   const totalScoreB = getTotalScore("B")
 
-  // クォーターの色
-  const getQuarterTextColor = (quarter: number) =>
+  const getQuarterColor = (quarter: number) =>
     quarter === 1 || quarter === 3 ? "text-red-600" : "text-foreground"
 
-  // 選手リストを取得
   const getPlayerList = (team: "A" | "B") => {
     const teamData = team === "A" ? state.teamA : state.teamB
     const active = teamData.players.filter((p) => p.number && p.isPlaying)
@@ -69,30 +75,6 @@ export function CombinedScoreGrid() {
     return active.length > 0 ? active : all
   }
 
-  // --- クリックハンドラ ---
-
-  // A/B 側セルのシングルクリック（得点追加 or 最終得点削除）
-  const handleSideClick = (point: number, team: "A" | "B") => {
-    const totalScore = team === "A" ? totalScoreA : totalScoreB
-    const scoreMap = team === "A" ? scoreMapA : scoreMapB
-
-    if (scoreMap.has(point)) {
-      // 最終得点のセルのみ削除ダイアログを開く
-      if (point === totalScore) {
-        setDeleteTeam(team)
-        setDeletePoint(point)
-        setDeleteDialogOpen(true)
-      }
-    } else if (point >= totalScore + 1) {
-      // 未得点かつ次以降 → 得点入力ダイアログ
-      setSelectedPoint(point)
-      setSelectedTeam(team)
-      setSelectedPlayer("")
-      setDialogOpen(true)
-    }
-  }
-
-  // 中央セルのタップ（ダブルタップでQ区切り線トグル）
   const handleCenterTap = (point: number) => {
     const now = Date.now()
     const last = lastCenterTapRef.current.get(point) ?? 0
@@ -104,159 +86,188 @@ export function CombinedScoreGrid() {
     }
   }
 
-  // 得点を追加
-  const handleAddScore = (isThreePointer: boolean) => {
-    if (!selectedPlayer || selectedPoint === null || !selectedTeam) return
-    const totalScore = selectedTeam === "A" ? totalScoreA : totalScoreB
-    const pointsToAdd = selectedPoint - totalScore
-    if (pointsToAdd > 0) {
-      addScore(selectedTeam, selectedPlayer, pointsToAdd, isThreePointer)
+  const handleTeamClick = (point: number, team: "A" | "B") => {
+    const totalScore = team === "A" ? totalScoreA : totalScoreB
+    const scoreMap = team === "A" ? scoreMapA : scoreMapB
+
+    if (scoreMap.has(point)) {
+      const entry = scoreMap.get(point)!
+      setEditPoint(point)
+      setEditTeam(team)
+      setEditPlayer(entry.playerNumber)
+      setEditPlayerManual(entry.playerNumber)
+      setEditIsLast(point === totalScore)
+      setEditDialogOpen(true)
+    } else if (point >= totalScore + 1) {
+      setAddPoint(point)
+      setAddTeam(team)
+      setAddPlayer("")
+      setAddPlayerManual("")
+      setAddDialogOpen(true)
     }
-    setDialogOpen(false)
-    setSelectedPoint(null)
-    setSelectedTeam(null)
-    setSelectedPlayer("")
   }
 
-  // 得点を削除
+  const resolveAddPlayer = () => addPlayer || addPlayerManual.trim()
+  const resolveEditPlayer = () => editPlayer || editPlayerManual.trim()
+
+  const handleAddScore = (isThreePointer: boolean) => {
+    const player = resolveAddPlayer()
+    if (!player || addPoint === null || !addTeam) return
+    const totalScore = addTeam === "A" ? totalScoreA : totalScoreB
+    const pointsToAdd = addPoint - totalScore
+    if (pointsToAdd > 0) {
+      addScore(addTeam, player, pointsToAdd, isThreePointer)
+    }
+    setAddDialogOpen(false)
+    setAddPoint(null)
+    setAddTeam(null)
+    setAddPlayer("")
+    setAddPlayerManual("")
+  }
+
+  const handleEditConfirm = () => {
+    const player = resolveEditPlayer()
+    if (!player || editPoint === null || !editTeam) return
+    updateScoreEntryPlayer(editTeam, editPoint, player)
+    setEditDialogOpen(false)
+  }
+
   const handleDeleteScore = () => {
-    if (deleteTeam) removeLastScore(deleteTeam)
-    setDeleteDialogOpen(false)
-    setDeleteTeam(null)
-    setDeletePoint(null)
+    if (editTeam) removeLastScore(editTeam)
+    setEditDialogOpen(false)
   }
 
-  // --- レンダラ ---
-
-  const renderPlayerNumber = (
-    entry: { playerNumber: string; quarter: number; isThreePointer: boolean } | undefined
-  ) => {
-    if (!entry) return <span className="text-transparent select-none">-</span>
-    return (
-      <span className={cn("text-[10px] font-bold whitespace-nowrap leading-none", getQuarterTextColor(entry.quarter))}>
-        {entry.isThreePointer ? (
-          <span className="border border-current rounded-full inline-flex items-center justify-center min-w-[1.1rem] h-[1.1rem] px-0.5 leading-none">
-            {entry.playerNumber}
-          </span>
-        ) : (
-          entry.playerNumber
-        )}
-      </span>
-    )
-  }
-
-  const renderScoreCell = (
+  // 数字セル（左スラッシュ付き）
+  const renderNumCell = (
     point: number,
-    entryA: { playerNumber: string; quarter: number; isThreePointer: boolean } | undefined,
-    entryB: { playerNumber: string; quarter: number; isThreePointer: boolean } | undefined
+    team: "A" | "B",
+    scoreMap: Map<number, ScoreEntry>,
+    totalScore: number
   ) => {
-    const isScoredA = !!entryA
-    const isScoredB = !!entryB
+    const entry = scoreMap.get(point)
+    const isScored = !!entry
+    const isNext = !isScored && point === totalScore + 1
+    const isClickable = isScored || point >= totalScore + 1
+    const qColor = entry ? getQuarterColor(entry.quarter) : ""
 
-    if (!isScoredA && !isScoredB) {
-      const isNextA = point === totalScoreA + 1
-      const isNextB = point === totalScoreB + 1
-      return (
+    return (
+      <div
+        className={cn(
+          "relative flex items-center justify-center h-full overflow-hidden select-none touch-manipulation",
+          isClickable ? "cursor-pointer active:brightness-90" : "",
+        )}
+        onClick={() => isClickable && handleTeamClick(point, team)}
+      >
+        {/* 点数 */}
         <span className={cn(
-          "text-[9px] leading-none",
-          isNextA || isNextB ? "text-primary font-bold" : "text-muted-foreground/60"
+          "font-mono leading-none z-10 select-none",
+          isScored
+            ? "text-[8px] text-muted-foreground/20"
+            : isNext
+              ? "text-[9px] font-bold text-primary"
+              : "text-[9px] text-foreground/60"
         )}>
           {point}
         </span>
-      )
-    }
 
-    return (
-      <div className="w-full h-full flex items-center justify-center relative">
-        {isScoredA && (
+        {/* 左スラッシュ "/" */}
+        {isScored && (
           <svg
-            className={cn("absolute inset-0 w-full h-full pointer-events-none", getQuarterTextColor(entryA.quarter))}
+            className={cn("absolute inset-0 w-full h-full pointer-events-none", qColor)}
             viewBox="0 0 100 100"
             preserveAspectRatio="none"
           >
-            <line x1="20" y1="80" x2="80" y2="20" stroke="currentColor" strokeWidth="5" />
+            <line x1="10" y1="90" x2="90" y2="10" stroke="currentColor" strokeWidth="10" />
           </svg>
         )}
-        {isScoredB && (
-          <svg
-            className={cn("absolute inset-0 w-full h-full pointer-events-none", getQuarterTextColor(entryB.quarter))}
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-          >
-            <line x1="20" y1="20" x2="80" y2="80" stroke="currentColor" strokeWidth="5" />
-          </svg>
-        )}
-        <span className="relative z-10 text-[9px] text-muted-foreground/40 leading-none">{point}</span>
       </div>
     )
   }
 
-  // 1列分のレンダリング（points: 表示する点数の配列）
+  // 背番号セル（A/B の外側列）
+  const renderPlayerCell = (
+    point: number,
+    team: "A" | "B",
+    scoreMap: Map<number, ScoreEntry>,
+    totalScore: number
+  ) => {
+    const entry = scoreMap.get(point)
+    const isScored = !!entry
+    const isClickable = isScored || point >= totalScore + 1
+    const qColor = entry ? getQuarterColor(entry.quarter) : ""
+
+    return (
+      <div
+        className={cn(
+          "flex items-center justify-center h-full select-none touch-manipulation overflow-hidden",
+          team === "A" ? "bg-primary/10" : "bg-accent/10",
+          isClickable ? "cursor-pointer active:brightness-90" : "",
+        )}
+        onClick={() => isClickable && handleTeamClick(point, team)}
+      >
+        {isScored && (
+          <span
+            className={cn("font-bold leading-none select-none", qColor)}
+            style={{ fontSize: "7px" }}
+          >
+            {entry!.isThreePointer ? (
+              <span
+                className="border border-current rounded-full inline-flex items-center justify-center leading-none"
+                style={{ fontSize: "6px", minWidth: "10px", height: "10px", padding: "0 1px" }}
+              >
+                {entry!.playerNumber}
+              </span>
+            ) : entry!.playerNumber}
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  // 1マクロ列のレンダリング
+  // 構成: [A背番号] [左数字（Aスラッシュ）] [右数字（Bスラッシュ）] [B背番号]
   const renderColumn = (points: number[]) => (
     <div className="flex-1 min-w-0">
       {/* ヘッダー */}
-      <div className="grid grid-cols-3 text-[8px] font-bold border-b-2 border-foreground/50 mb-0">
-        <div className="text-center text-primary py-0.5 truncate">A</div>
-        <div className="text-center text-muted-foreground py-0.5">点</div>
-        <div className="text-center text-accent py-0.5 truncate">B</div>
+      <div className="grid grid-cols-[2fr_4fr_4fr_2fr] text-[8px] font-bold border-b-2 border-foreground/50 h-5">
+        <div className="flex items-center justify-center bg-primary/10 text-primary">A</div>
+        <div className="flex items-center justify-center border-l border-border/30 text-muted-foreground">数</div>
+        <div className="flex items-center justify-center border-l border-border/30 text-muted-foreground">数</div>
+        <div className="flex items-center justify-center border-l border-border/30 bg-accent/10 text-accent">B</div>
       </div>
 
+      {/* 行 */}
       {points.map((point) => {
-        const entryA = scoreMapA.get(point)
-        const entryB = scoreMapB.get(point)
-        const isScoredA = !!entryA
-        const isScoredB = !!entryB
         const isQuarterLine = state.quarterLines.includes(point)
-
         return (
           <div
             key={point}
             className={cn(
-              "grid grid-cols-3 h-6",
+              "grid grid-cols-[2fr_4fr_4fr_2fr] h-6",
               isQuarterLine
                 ? "border-b-[3px] border-foreground"
                 : "border-b border-border/40"
             )}
           >
-            {/* A チーム 背番号 */}
-            <div
-              className={cn(
-                "flex items-center justify-center bg-primary/5 select-none",
-                !isScoredA && point >= totalScoreA + 1
-                  ? "cursor-pointer active:bg-primary/20"
-                  : isScoredA && point === totalScoreA
-                    ? "cursor-pointer active:bg-red-100"
-                    : ""
-              )}
-              onClick={() => handleSideClick(point, "A")}
-            >
-              {renderPlayerNumber(entryA)}
+            {/* A 背番号列 */}
+            {renderPlayerCell(point, "A", scoreMapA, totalScoreA)}
+
+            {/* 左数字列（A がスラッシュ） */}
+            <div className="border-l border-border/30">
+              {renderNumCell(point, "A", scoreMapA, totalScoreA)}
             </div>
 
-            {/* 中央 点数（ダブルタップでQ区切り線） */}
+            {/* 右数字列（B がスラッシュ）・ダブルタップでQ区切り */}
             <div
-              className={cn(
-                "flex items-center justify-center border-x border-border/20 cursor-pointer select-none touch-manipulation",
-                isQuarterLine && "bg-foreground/5"
-              )}
+              className="border-l border-border/30"
               onClick={() => handleCenterTap(point)}
             >
-              {renderScoreCell(point, entryA, entryB)}
+              {renderNumCell(point, "B", scoreMapB, totalScoreB)}
             </div>
 
-            {/* B チーム 背番号 */}
-            <div
-              className={cn(
-                "flex items-center justify-center bg-accent/5 select-none",
-                !isScoredB && point >= totalScoreB + 1
-                  ? "cursor-pointer active:bg-accent/20"
-                  : isScoredB && point === totalScoreB
-                    ? "cursor-pointer active:bg-red-100"
-                    : ""
-              )}
-              onClick={() => handleSideClick(point, "B")}
-            >
-              {renderPlayerNumber(entryB)}
+            {/* B 背番号列 */}
+            <div className="border-l border-border/30">
+              {renderPlayerCell(point, "B", scoreMapB, totalScoreB)}
             </div>
           </div>
         )
@@ -266,7 +277,47 @@ export function CombinedScoreGrid() {
 
   const col1 = Array.from({ length: 80 }, (_, i) => i + 1)
   const col2 = Array.from({ length: 80 }, (_, i) => i + 81)
-  const playerListForDialog = selectedTeam ? getPlayerList(selectedTeam) : []
+  const addPlayerList = addTeam ? getPlayerList(addTeam) : []
+  const editPlayerList = editTeam ? getPlayerList(editTeam) : []
+
+  const PlayerSelectUI = ({
+    playerList,
+    selected,
+    onSelect,
+    manual,
+    onManual,
+  }: {
+    playerList: { number: string; name: string }[]
+    selected: string
+    onSelect: (v: string) => void
+    manual: string
+    onManual: (v: string) => void
+  }) => (
+    <div className="space-y-2">
+      <label className="text-sm font-medium">得点した選手</label>
+      {playerList.length > 0 ? (
+        <Select value={selected} onValueChange={onSelect}>
+          <SelectTrigger>
+            <SelectValue placeholder="背番号を選択" />
+          </SelectTrigger>
+          <SelectContent>
+            {playerList.map((p) => (
+              <SelectItem key={p.number} value={p.number}>
+                #{p.number} {p.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : (
+        <Input
+          placeholder="背番号を入力（例：5）"
+          value={manual}
+          onChange={(e) => onManual(e.target.value)}
+          inputMode="numeric"
+        />
+      )}
+    </div>
+  )
 
   return (
     <Card>
@@ -288,21 +339,17 @@ export function CombinedScoreGrid() {
       </CardHeader>
 
       <CardContent className="px-2 pb-3">
-        {/* 2列グリッド */}
         <div className="flex gap-1">
           {renderColumn(col1)}
           {renderColumn(col2)}
         </div>
 
-        {/* 凡例 */}
         <div className="flex flex-wrap items-center justify-center gap-3 mt-3 text-[10px] text-muted-foreground border-t pt-2">
           <div className="flex items-center gap-1">
-            <span className="text-red-600 font-bold">赤</span>
-            <span>= 1Q/3Q</span>
+            <span className="text-red-600 font-bold">赤</span><span>= 1Q/3Q</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-foreground font-bold">黒</span>
-            <span>= 2Q/4Q</span>
+            <span className="text-foreground font-bold">黒</span><span>= 2Q/4Q</span>
           </div>
           <div className="flex items-center gap-1">
             <span className="border border-current rounded-full inline-flex items-center justify-center w-4 h-4 text-[8px] font-bold">5</span>
@@ -310,64 +357,48 @@ export function CombinedScoreGrid() {
           </div>
           <div className="flex items-center gap-1">
             <span className="inline-block w-4 border-b-[3px] border-foreground" />
-            <span>= Q区切り（点数部分をダブルタップ）</span>
+            <span>= Q区切り（右数字列ダブルタップ）</span>
           </div>
         </div>
       </CardContent>
 
-      {/* 得点入力ダイアログ */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      {/* 得点追加ダイアログ */}
+      <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-center">
-              <span className={cn(
-                "inline-flex items-center gap-1.5",
-                selectedTeam === "A" ? "text-primary" : "text-accent"
-              )}>
-                <span className={cn(
-                  "w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white",
-                  selectedTeam === "A" ? "bg-primary" : "bg-accent"
-                )}>
-                  {selectedTeam}
+              <span className={cn("inline-flex items-center gap-1.5", addTeam === "A" ? "text-primary" : "text-accent")}>
+                <span className={cn("w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white", addTeam === "A" ? "bg-primary" : "bg-accent")}>
+                  {addTeam}
                 </span>
-                {selectedTeam === "A" ? state.teamA.name || "チームA" : state.teamB.name || "チームB"}
+                {addTeam === "A" ? state.teamA.name || "チームA" : state.teamB.name || "チームB"}
               </span>
               <br />
-              <span className="text-base font-bold">{selectedPoint}点目を記録</span>
+              <span className="text-base font-bold">{addPoint}点目を記録</span>
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4 pt-2">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">得点した選手</label>
-              <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
-                <SelectTrigger>
-                  <SelectValue placeholder="背番号を選択" />
-                </SelectTrigger>
-                <SelectContent>
-                  {playerListForDialog.map((player) => (
-                    <SelectItem key={player.number} value={player.number}>
-                      #{player.number} {player.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
+            <PlayerSelectUI
+              playerList={addPlayerList}
+              selected={addPlayer}
+              onSelect={setAddPlayer}
+              manual={addPlayerManual}
+              onManual={setAddPlayerManual}
+            />
             <div className="grid grid-cols-2 gap-3">
               <Button
                 variant="outline"
                 className="h-14 text-base font-bold"
                 onClick={() => handleAddScore(false)}
-                disabled={!selectedPlayer}
+                disabled={!resolveAddPlayer()}
               >
-                通常
-                <span className="text-[10px] text-muted-foreground ml-1">(FT/2P)</span>
+                通常<span className="text-[10px] text-muted-foreground ml-1">(FT/2P)</span>
               </Button>
               <Button
                 variant="outline"
                 className="h-14 text-base font-bold border-2 border-primary"
                 onClick={() => handleAddScore(true)}
-                disabled={!selectedPlayer}
+                disabled={!resolveAddPlayer()}
               >
                 <span className="border-2 border-current rounded-full px-2 py-0.5">3P</span>
               </Button>
@@ -376,26 +407,40 @@ export function CombinedScoreGrid() {
         </DialogContent>
       </Dialog>
 
-      {/* 削除確認ダイアログ */}
-      <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      {/* 選手修正ダイアログ */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-center">
-              <Trash2 className="w-7 h-7 mx-auto mb-1 text-destructive" />
-              得点を取り消しますか？
+              <span className={cn("inline-flex items-center gap-1.5", editTeam === "A" ? "text-primary" : "text-accent")}>
+                <span className={cn("w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white", editTeam === "A" ? "bg-primary" : "bg-accent")}>
+                  {editTeam}
+                </span>
+                {editPoint}点目の背番号修正
+              </span>
             </DialogTitle>
           </DialogHeader>
-          <div className="space-y-4 pt-1">
-            <p className="text-center text-sm text-muted-foreground">
-              {deleteTeam === "A" ? state.teamA.name || "チームA" : state.teamB.name || "チームB"} の
-              最後の得点（{deletePoint}点目）を取り消します。
-            </p>
-            <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>
-                キャンセル
-              </Button>
-              <Button variant="destructive" onClick={handleDeleteScore}>
-                取り消す
+          <div className="space-y-4 pt-2">
+            <PlayerSelectUI
+              playerList={editPlayerList}
+              selected={editPlayer}
+              onSelect={setEditPlayer}
+              manual={editPlayerManual}
+              onManual={setEditPlayerManual}
+            />
+            <div className={cn("grid gap-3", editIsLast ? "grid-cols-3" : "grid-cols-1")}>
+              {editIsLast && (
+                <Button variant="destructive" className="h-12" onClick={handleDeleteScore}>
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+              <Button
+                variant="default"
+                className={cn("h-12", editIsLast ? "col-span-2" : "")}
+                onClick={handleEditConfirm}
+                disabled={!resolveEditPlayer()}
+              >
+                修正する
               </Button>
             </div>
           </div>
