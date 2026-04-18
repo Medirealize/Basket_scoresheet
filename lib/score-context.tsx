@@ -67,6 +67,7 @@ export interface ScoreEntry {
   totalScore: number
   timestamp: number
   isThreePointer: boolean
+  isFreeThrow?: boolean
 }
 
 export interface ScoreState {
@@ -155,7 +156,7 @@ interface ScoreContextType {
   updateTeamA: (team: Partial<TeamData>) => void
   updateTeamB: (team: Partial<TeamData>) => void
   updateOfficials: (officials: Partial<Officials>) => void
-  addScore: (team: "A" | "B", playerNumber: string, points: number, isThreePointer?: boolean) => void
+  addScore: (team: "A" | "B", playerNumber: string, points: number, isThreePointer?: boolean, isFreeThrow?: boolean) => void
   removeLastScore: (team: "A" | "B") => void
   updateScoreEntryPlayer: (team: "A" | "B", point: number, newPlayerNumber: string) => void
   addFoul: (team: "A" | "B", playerIndex: number, foulType: FoulType) => void
@@ -204,7 +205,7 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
     }))
   }
 
-  const addScore = (team: "A" | "B", playerNumber: string, points: number, isThreePointer?: boolean) => {
+  const addScore = (team: "A" | "B", playerNumber: string, points: number, isThreePointer?: boolean, isFreeThrow?: boolean) => {
     setState((prev) => {
       const currentEntries = prev.scoreEntries.filter(
         (e) => e.team === team && e.quarter === prev.currentQuarter
@@ -223,6 +224,7 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
         totalScore: lastTotal + points,
         timestamp: Date.now(),
         isThreePointer: isThreePointer ?? (points === 3),
+        isFreeThrow: isFreeThrow ?? false,
       }
       
       return {

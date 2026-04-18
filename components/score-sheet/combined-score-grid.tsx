@@ -21,19 +21,22 @@ import {
 import { cn } from "@/lib/utils"
 import { Trash2 } from "lucide-react"
 
-type ScoreEntry = { playerNumber: string; quarter: number; isThreePointer: boolean }
+type ScoreEntry = {
+  playerNumber: string
+  quarter: number
+  isThreePointer: boolean
+  isFreeThrow: boolean
+}
 
 export function CombinedScoreGrid() {
   const { state, getTotalScore, addScore, removeLastScore, toggleQuarterLine, updateScoreEntryPlayer } = useScore()
 
-  // 得点追加ダイアログ
   const [addDialogOpen, setAddDialogOpen] = useState(false)
   const [addPoint, setAddPoint] = useState<number | null>(null)
   const [addTeam, setAddTeam] = useState<"A" | "B" | null>(null)
   const [addPlayer, setAddPlayer] = useState("")
   const [addPlayerManual, setAddPlayerManual] = useState("")
 
-  // 選手修正ダイアログ
   const [editDialogOpen, setEditDialogOpen] = useState(false)
   const [editPoint, setEditPoint] = useState<number | null>(null)
   const [editTeam, setEditTeam] = useState<"A" | "B" | null>(null)
@@ -41,7 +44,6 @@ export function CombinedScoreGrid() {
   const [editPlayerManual, setEditPlayerManual] = useState("")
   const [editIsLast, setEditIsLast] = useState(false)
 
-  // 中央区切りのダブルタップ（Q区切り線）
   const lastCenterTapRef = useRef<Map<number, number>>(new Map())
 
   const getScoreMap = (team: "A" | "B") => {
@@ -54,6 +56,7 @@ export function CombinedScoreGrid() {
           playerNumber: entry.playerNumber,
           quarter: entry.quarter,
           isThreePointer: entry.isThreePointer && i === entry.points - 1,
+          isFreeThrow: (entry.isFreeThrow ?? false) && i === 0,
         })
       }
     })
@@ -64,9 +67,6 @@ export function CombinedScoreGrid() {
   const scoreMapB = getScoreMap("B")
   const totalScoreA = getTotalScore("A")
   const totalScoreB = getTotalScore("B")
-
-  const getQuarterColor = (quarter: number) =>
-    quarter === 1 || quarter === 3 ? "text-red-600" : "text-foreground"
 
   const getPlayerList = (team: "A" | "B") => {
     const teamData = team === "A" ? state.teamA : state.teamB
@@ -110,13 +110,20 @@ export function CombinedScoreGrid() {
   const resolveAddPlayer = () => addPlayer || addPlayerManual.trim()
   const resolveEditPlayer = () => editPlayer || editPlayerManual.trim()
 
-  const handleAddScore = (isThreePointer: boolean) => {
+  const handleAddScore = (shotType: "FT" | "2P" | "3P") => {
     const player = resolveAddPlayer()
     if (!player || addPoint === null || !addTeam) return
     const totalScore = addTeam === "A" ? totalScoreA : totalScoreB
-    const pointsToAdd = addPoint - totalScore
+    // FT は必ず1点、2P/3P はセルで決まった点数
+    const pointsToAdd = shotType === "FT" ? 1 : addPoint - totalScore
     if (pointsToAdd > 0) {
-      addScore(addTeam, player, pointsToAdd, isThreePointer)
+      addScore(
+        addTeam,
+        player,
+        pointsToAdd,
+        shotType === "3P",
+        shotType === "FT"
+      )
     }
     setAddDialogOpen(false)
     setAddPoint(null)
@@ -137,103 +144,129 @@ export function CombinedScoreGrid() {
     setEditDialogOpen(false)
   }
 
-  // 数字セル（左スラッシュ付き）
+  // 塗り丸マーカー（背番号入り）
+  const CircleMarker = ({ entry }: { entry: ScoreEntry }) => {
+    const isRed = entry.quarter === 1 || entry.quarter === 3
+    if (entry.isFreeThrow) {
+      // FT: 白抜き丸（外枠のみ）
+      return (
+        <div
+          className={cn(
+            "w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center font-bold leading-none",
+            isRed ? "border-red-600 text-red-600" : "border-foreground text-foreground"
+          )}
+          style={{ fontSize: "6px" }}
+        >
+          {entry.playerNumber}
+        </div>
+      )
+    }
+    if (entry.isThreePointer) {
+      // 3P: 塗り丸 + 外リング
+      return (
+        <div
+          className={cn(
+            "w-[18px] h-[18px] rounded-full flex items-center justify-center font-bold leading-none ring-2 ring-offset-0",
+            isRed ? "bg-red-600 text-white ring-red-300" : "bg-foreground text-white ring-foreground/40"
+          )}
+          style={{ fontSize: "6px" }}
+        >
+          {entry.playerNumber}
+        </div>
+      )
+    }
+    // 2P: 塗り丸（通常）
+    return (
+      <div
+        className={cn(
+          "w-[18px] h-[18px] rounded-full flex items-center justify-center font-bold leading-none",
+          isRed ? "bg-red-600 text-white" : "bg-foreground text-white"
+        )}
+        style={{ fontSize: "6px" }}
+      >
+        {entry.playerNumber}
+      </div>
+    )
+  }
+
+  // 数字セル（左=Aスラッシュ / 右=Bスラッシュ）
   const renderNumCell = (
     point: number,
     team: "A" | "B",
     scoreMap: Map<number, ScoreEntry>,
-    totalScore: number
+    totalScore: number,
+    isRightCol: boolean
   ) => {
     const entry = scoreMap.get(point)
     const isScored = !!entry
     const isNext = !isScored && point === totalScore + 1
     const isClickable = isScored || point >= totalScore + 1
-    const qColor = entry ? getQuarterColor(entry.quarter) : ""
 
     return (
       <div
         className={cn(
-          "relative flex items-center justify-center h-full overflow-hidden select-none touch-manipulation",
+          "relative flex items-center justify-center h-full select-none touch-manipulation",
           isClickable ? "cursor-pointer active:brightness-90" : "",
         )}
-        onClick={() => isClickable && handleTeamClick(point, team)}
+        style={{ flex: 3 }}
+        onClick={() => {
+          if (isRightCol) {
+            handleCenterTap(point)  // ダブルタップ用（右列）
+          }
+          if (isClickable) handleTeamClick(point, team)
+        }}
       >
-        {/* 点数 */}
-        <span className={cn(
-          "font-mono leading-none z-10 select-none",
-          isScored
-            ? "text-[8px] text-muted-foreground/20"
-            : isNext
-              ? "text-[9px] font-bold text-primary"
-              : "text-[9px] text-foreground/60"
-        )}>
-          {point}
-        </span>
-
-        {/* 左スラッシュ "/" */}
-        {isScored && (
-          <svg
-            className={cn("absolute inset-0 w-full h-full pointer-events-none", qColor)}
-            viewBox="0 0 100 100"
-            preserveAspectRatio="none"
-          >
-            <line x1="10" y1="90" x2="90" y2="10" stroke="currentColor" strokeWidth="10" />
-          </svg>
-        )}
-      </div>
-    )
-  }
-
-  // 背番号セル（A/B の外側列）
-  const renderPlayerCell = (
-    point: number,
-    team: "A" | "B",
-    scoreMap: Map<number, ScoreEntry>,
-    totalScore: number
-  ) => {
-    const entry = scoreMap.get(point)
-    const isScored = !!entry
-    const isClickable = isScored || point >= totalScore + 1
-    const qColor = entry ? getQuarterColor(entry.quarter) : ""
-
-    return (
-      <div
-        className={cn(
-          "flex items-center justify-center h-full select-none touch-manipulation overflow-hidden",
-          team === "A" ? "bg-primary/10" : "bg-accent/10",
-          isClickable ? "cursor-pointer active:brightness-90" : "",
-        )}
-        onClick={() => isClickable && handleTeamClick(point, team)}
-      >
-        {isScored && (
-          <span
-            className={cn("font-bold leading-none select-none", qColor)}
-            style={{ fontSize: "7px" }}
-          >
-            {entry!.isThreePointer ? (
-              <span
-                className="border border-current rounded-full inline-flex items-center justify-center leading-none"
-                style={{ fontSize: "6px", minWidth: "10px", height: "10px", padding: "0 1px" }}
-              >
-                {entry!.playerNumber}
-              </span>
-            ) : entry!.playerNumber}
+        {/* 未得点: 点数テキスト */}
+        {!isScored && (
+          <span className={cn(
+            "font-mono leading-none select-none",
+            isNext ? "text-[9px] font-bold text-primary" : "text-[9px] text-foreground/55"
+          )}>
+            {point}
           </span>
+        )}
+
+        {/* 得点済み: 塗り丸マーカー */}
+        {isScored && (
+          <CircleMarker entry={entry} />
         )}
       </div>
     )
   }
 
   // 1マクロ列のレンダリング
-  // 構成: [A背番号] [左数字（Aスラッシュ）] [右数字（Bスラッシュ）] [B背番号]
+  // 構成: [A背景(空)] [左数字(A得点)] [右数字(B得点)] [B背景(空)]
   const renderColumn = (points: number[]) => (
-    <div className="flex-1 min-w-0">
+    <div style={{ flex: 1, minWidth: 0 }}>
       {/* ヘッダー */}
-      <div className="grid grid-cols-[2fr_4fr_4fr_2fr] text-[8px] font-bold border-b-2 border-foreground/50 h-5">
-        <div className="flex items-center justify-center bg-primary/10 text-primary">A</div>
-        <div className="flex items-center justify-center border-l border-border/30 text-muted-foreground">数</div>
-        <div className="flex items-center justify-center border-l border-border/30 text-muted-foreground">数</div>
-        <div className="flex items-center justify-center border-l border-border/30 bg-accent/10 text-accent">B</div>
+      <div
+        className="border-b-2 border-foreground/50"
+        style={{ display: "flex", height: "20px" }}
+      >
+        <div
+          className="flex items-center justify-center text-[9px] font-bold text-primary bg-primary/10"
+          style={{ flex: 2 }}
+        >
+          A
+        </div>
+        <div
+          className="flex items-center justify-center text-[8px] text-muted-foreground border-l border-border/30"
+          style={{ flex: 3 }}
+        >
+          得点
+        </div>
+        <div
+          className="flex items-center justify-center text-[8px] text-muted-foreground border-l border-border/30"
+          style={{ flex: 3 }}
+        >
+          得点
+        </div>
+        <div
+          className="flex items-center justify-center text-[9px] font-bold text-accent bg-accent/10 border-l border-border/30"
+          style={{ flex: 2 }}
+        >
+          B
+        </div>
       </div>
 
       {/* 行 */}
@@ -242,33 +275,24 @@ export function CombinedScoreGrid() {
         return (
           <div
             key={point}
-            className={cn(
-              "grid grid-cols-[2fr_4fr_4fr_2fr] h-6",
-              isQuarterLine
-                ? "border-b-[3px] border-foreground"
-                : "border-b border-border/40"
-            )}
+            className={isQuarterLine ? "border-b-[3px] border-foreground" : "border-b border-border/40"}
+            style={{ display: "flex", height: "24px" }}
           >
-            {/* A 背番号列 */}
-            {renderPlayerCell(point, "A", scoreMapA, totalScoreA)}
+            {/* A 背景（空） */}
+            <div className="bg-primary/5" style={{ flex: 2 }} />
 
-            {/* 左数字列（A がスラッシュ） */}
-            <div className="border-l border-border/30">
-              {renderNumCell(point, "A", scoreMapA, totalScoreA)}
+            {/* 左数字列（A が得点 → 塗り丸） */}
+            <div className="border-l border-border/30" style={{ flex: 3, position: "relative" }}>
+              {renderNumCell(point, "A", scoreMapA, totalScoreA, false)}
             </div>
 
-            {/* 右数字列（B がスラッシュ）・ダブルタップでQ区切り */}
-            <div
-              className="border-l border-border/30"
-              onClick={() => handleCenterTap(point)}
-            >
-              {renderNumCell(point, "B", scoreMapB, totalScoreB)}
+            {/* 右数字列（B が得点 → 塗り丸）/ ダブルタップでQ区切り */}
+            <div className="border-l border-border/30" style={{ flex: 3, position: "relative" }}>
+              {renderNumCell(point, "B", scoreMapB, totalScoreB, true)}
             </div>
 
-            {/* B 背番号列 */}
-            <div className="border-l border-border/30">
-              {renderPlayerCell(point, "B", scoreMapB, totalScoreB)}
-            </div>
+            {/* B 背景（空） */}
+            <div className="bg-accent/5 border-l border-border/30" style={{ flex: 2 }} />
           </div>
         )
       })}
@@ -339,25 +363,32 @@ export function CombinedScoreGrid() {
       </CardHeader>
 
       <CardContent className="px-2 pb-3">
-        <div className="flex gap-1">
+        <div style={{ display: "flex", gap: "4px" }}>
           {renderColumn(col1)}
           {renderColumn(col2)}
         </div>
 
+        {/* 凡例 */}
         <div className="flex flex-wrap items-center justify-center gap-3 mt-3 text-[10px] text-muted-foreground border-t pt-2">
           <div className="flex items-center gap-1">
-            <span className="text-red-600 font-bold">赤</span><span>= 1Q/3Q</span>
+            <div className="w-4 h-4 rounded-full bg-foreground" />
+            <span>= 2P（黒丸）</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="text-foreground font-bold">黒</span><span>= 2Q/4Q</span>
+            <div className="w-4 h-4 rounded-full bg-red-600" />
+            <span>= 1Q/3Q（赤丸）</span>
           </div>
           <div className="flex items-center gap-1">
-            <span className="border border-current rounded-full inline-flex items-center justify-center w-4 h-4 text-[8px] font-bold">5</span>
+            <div className="w-4 h-4 rounded-full bg-foreground ring-2 ring-foreground/40" />
             <span>= 3P</span>
           </div>
           <div className="flex items-center gap-1">
+            <div className="w-4 h-4 rounded-full border-2 border-foreground" />
+            <span>= FT</span>
+          </div>
+          <div className="flex items-center gap-1">
             <span className="inline-block w-4 border-b-[3px] border-foreground" />
-            <span>= Q区切り（右数字列ダブルタップ）</span>
+            <span>= Q区切り（右列ダブルタップ）</span>
           </div>
         </div>
       </CardContent>
@@ -385,22 +416,33 @@ export function CombinedScoreGrid() {
               manual={addPlayerManual}
               onManual={setAddPlayerManual}
             />
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-2">
               <Button
                 variant="outline"
-                className="h-14 text-base font-bold"
-                onClick={() => handleAddScore(false)}
+                className="h-14 flex-col gap-0.5"
+                onClick={() => handleAddScore("FT")}
                 disabled={!resolveAddPlayer()}
               >
-                通常<span className="text-[10px] text-muted-foreground ml-1">(FT/2P)</span>
+                <span className="text-base font-bold">FT</span>
+                <span className="text-[10px] text-muted-foreground">+1点</span>
               </Button>
               <Button
                 variant="outline"
-                className="h-14 text-base font-bold border-2 border-primary"
-                onClick={() => handleAddScore(true)}
+                className="h-14 flex-col gap-0.5"
+                onClick={() => handleAddScore("2P")}
                 disabled={!resolveAddPlayer()}
               >
-                <span className="border-2 border-current rounded-full px-2 py-0.5">3P</span>
+                <span className="text-base font-bold">2P</span>
+                <span className="text-[10px] text-muted-foreground">+2点</span>
+              </Button>
+              <Button
+                variant="outline"
+                className="h-14 flex-col gap-0.5 border-2 border-primary"
+                onClick={() => handleAddScore("3P")}
+                disabled={!resolveAddPlayer()}
+              >
+                <span className="text-base font-bold">3P</span>
+                <span className="text-[10px] text-muted-foreground">+3点</span>
               </Button>
             </div>
           </div>
