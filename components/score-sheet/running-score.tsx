@@ -102,7 +102,15 @@ export function RunningScore({ team }: RunningScoreProps) {
         {/* 得点追加ダイアログ */}
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="w-full h-14 text-lg" variant={team === "A" ? "default" : "outline"}>
+            <Button
+              type="button"
+              className={cn(
+                "w-full h-14 text-lg shadow-none",
+                team === "B" &&
+                  "border-transparent bg-accent text-white hover:bg-accent/90 hover:text-white focus-visible:ring-accent/40"
+              )}
+              variant="default"
+            >
               <Plus className="mr-2 h-5 w-5" />
               得点を追加
             </Button>

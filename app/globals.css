@@ -157,8 +157,7 @@
     print-color-adjust: exact !important;
   }
 
-  /* 印刷時に非表示にする要素 */
-  .print\\:hidden,
+  /* 印刷時に非表示にする要素（print:hidden は Tailwind が出力） */
   [data-radix-dialog-overlay],
   header,
   nav,

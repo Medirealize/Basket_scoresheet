@@ -7,7 +7,7 @@ import {
   getRunningCellMeta,
   lastRunningScoreByQuarter,
   quarterSeparatorBottomClassPrint,
-  quarterSeparatorLineStylesByPoint,
+  quarterSeparatorLineStylesForTeam,
 } from "@/lib/running-score-helpers"
 import { normalizeQuarterMinutes } from "@/lib/timeout-sheet"
 import { cn } from "@/lib/utils"
@@ -27,8 +27,12 @@ export function PrintScoreSheet() {
     []
   )
 
-  const quarterLineStylesByPoint = useMemo(
-    () => quarterSeparatorLineStylesByPoint(state.scoreEntries, state.quarterLines),
+  const quarterLineStylesA = useMemo(
+    () => quarterSeparatorLineStylesForTeam(state.scoreEntries, "A", state.quarterLines),
+    [state.scoreEntries, state.quarterLines]
+  )
+  const quarterLineStylesB = useMemo(
+    () => quarterSeparatorLineStylesForTeam(state.scoreEntries, "B", state.quarterLines),
     [state.scoreEntries, state.quarterLines]
   )
   const qEndA = useMemo(
@@ -244,20 +248,25 @@ export function PrintScoreSheet() {
               {colPoints.map((point) => {
                 const metaA = getRunningCellMeta(state.scoreEntries, "A", point)
                 const metaB = getRunningCellMeta(state.scoreEntries, "B", point)
-                const sepStyle = quarterLineStylesByPoint.get(point)
+                const sepStyleA = quarterLineStylesA.get(point)
+                const sepStyleB = quarterLineStylesB.get(point)
                 const gameDone = Boolean(state.winner)
                 const endA = gameDone && point === totalScoreA && totalScoreA + totalScoreB > 0
                 const endB = gameDone && point === totalScoreB && totalScoreA + totalScoreB > 0
                 const bottomA = endA
                   ? "border-b-2 border-double border-black"
-                  : sepStyle
-                    ? quarterSeparatorBottomClassPrint(sepStyle)
+                  : sepStyleA
+                    ? quarterSeparatorBottomClassPrint(sepStyleA)
                     : "border-b border-gray-200"
                 const bottomB = endB
                   ? "border-b-2 border-double border-black"
-                  : sepStyle
-                    ? quarterSeparatorBottomClassPrint(sepStyle)
+                  : sepStyleB
+                    ? quarterSeparatorBottomClassPrint(sepStyleB)
                     : "border-b border-gray-200"
+
+                /** 太い横線の行では A得点|B得点 間の縦線を消し、横線だけが通るようにする */
+                const hideScoreMidVertical =
+                  Boolean(sepStyleA || sepStyleB) || endA || endB
 
                 const renderScore = (meta: ReturnType<typeof getRunningCellMeta>, qEnd: boolean) => {
                   if (!meta) {
@@ -347,7 +356,8 @@ export function PrintScoreSheet() {
                     </div>
                     <div
                       className={cn(
-                        "flex flex-1 items-center justify-center border-r border-black bg-white",
+                        "flex flex-1 items-center justify-center bg-white",
+                        !hideScoreMidVertical && "border-r border-black",
                         bottomA
                       )}
                     >

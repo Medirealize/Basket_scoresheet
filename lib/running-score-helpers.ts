@@ -73,30 +73,30 @@ export function quarterSeparatorRows(entries: ScoreEntry[]): Set<number> {
   return s
 }
 
-/** Q間の太線: 1–2 赤、2–3 黒、3–4 赤、4 終了 黒二重。延長は黒太線。手動線は未設定行のみ黒太線 */
+/** Q間の太線: 1–2 赤、2–3 黒、3–4 赤、4 終了 黒二重。延長は黒太線。手動線はその行に自動線が無い列のみ黒太線 */
 export type QuarterSeparatorLineStyle = "red-thick" | "black-thick" | "black-double"
 
-export function quarterSeparatorLineStylesByPoint(
+function quarterSeparatorLineStyleForQuarterNumber(q: number): QuarterSeparatorLineStyle {
+  if (q === 1 || q === 3) return "red-thick"
+  if (q === 2) return "black-thick"
+  if (q === 4) return "black-double"
+  return "black-thick"
+}
+
+/** 指定チームの得点列だけに引くQ間太線（そのチームの各Q終了累計点の行） */
+export function quarterSeparatorLineStylesForTeam(
   entries: ScoreEntry[],
+  team: "A" | "B",
   manualLinePoints: readonly number[]
 ): Map<number, QuarterSeparatorLineStyle> {
-  const lastA = lastRunningScoreByQuarter(entries, "A")
-  const lastB = lastRunningScoreByQuarter(entries, "B")
+  const lastByQ = lastRunningScoreByQuarter(entries, team)
   const map = new Map<number, QuarterSeparatorLineStyle>()
   const maxQ = Math.max(4, ...entries.map((e) => e.quarter), 0)
 
   for (let q = 1; q <= maxQ; q++) {
-    const a = lastA.get(q)
-    const b = lastB.get(q)
-    if (a === undefined && b === undefined) continue
-    const row = Math.max(a ?? 0, b ?? 0)
-    if (row < 1) continue
-    let style: QuarterSeparatorLineStyle
-    if (q === 1 || q === 3) style = "red-thick"
-    else if (q === 2) style = "black-thick"
-    else if (q === 4) style = "black-double"
-    else style = "black-thick"
-    map.set(row, style)
+    const row = lastByQ.get(q)
+    if (row === undefined || row < 1) continue
+    map.set(row, quarterSeparatorLineStyleForQuarterNumber(q))
   }
 
   for (const p of manualLinePoints) {

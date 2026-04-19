@@ -24,7 +24,7 @@ import {
   getRunningCellMeta,
   lastRunningScoreByQuarter,
   quarterSeparatorBottomClassScreen,
-  quarterSeparatorLineStylesByPoint,
+  quarterSeparatorLineStylesForTeam,
 } from "@/lib/running-score-helpers"
 import { Trash2 } from "lucide-react"
 
@@ -71,8 +71,12 @@ export function CombinedScoreGrid() {
   const totalScoreB = getTotalScore("B")
   const gameEnded = Boolean(state.winner)
 
-  const quarterLineStylesByPoint = useMemo(
-    () => quarterSeparatorLineStylesByPoint(state.scoreEntries, state.quarterLines),
+  const quarterLineStylesA = useMemo(
+    () => quarterSeparatorLineStylesForTeam(state.scoreEntries, "A", state.quarterLines),
+    [state.scoreEntries, state.quarterLines]
+  )
+  const quarterLineStylesB = useMemo(
+    () => quarterSeparatorLineStylesForTeam(state.scoreEntries, "B", state.quarterLines),
     [state.scoreEntries, state.quarterLines]
   )
 
@@ -264,20 +268,25 @@ export function CombinedScoreGrid() {
             const metaB = scoreMapB.get(point)
             const qEndA = isQuarterEndScore("A", point)
             const qEndB = isQuarterEndScore("B", point)
-            const sepStyle = quarterLineStylesByPoint.get(point)
+            const sepStyleA = quarterLineStylesA.get(point)
+            const sepStyleB = quarterLineStylesB.get(point)
             const endGameA = teamGameEndRow("A", point)
             const endGameB = teamGameEndRow("B", point)
 
             const bottomA = endGameA
               ? "border-b-4 border-double border-black"
-              : sepStyle
-                ? quarterSeparatorBottomClassScreen(sepStyle)
+              : sepStyleA
+                ? quarterSeparatorBottomClassScreen(sepStyleA)
                 : "border-b border-black"
             const bottomB = endGameB
               ? "border-b-4 border-double border-black"
-              : sepStyle
-                ? quarterSeparatorBottomClassScreen(sepStyle)
+              : sepStyleB
+                ? quarterSeparatorBottomClassScreen(sepStyleB)
                 : "border-b border-black"
+
+            /** Q区切り・試合終了の太横線の行では、A得点とB得点の間の縦線を消す */
+            const hideScoreMidVertical =
+              Boolean(sepStyleA || sepStyleB) || endGameA || endGameB
 
             const clickableA =
               (!metaA && point >= totalScoreA + 1) || Boolean(metaA && !metaA.hideJerseyAndScore)
@@ -316,7 +325,13 @@ export function CombinedScoreGrid() {
                     )}
                   </button>
                 </td>
-                <td className={cn("border-r border-black bg-white p-0 align-middle", bottomA)}>
+                <td
+                  className={cn(
+                    "bg-white p-0 align-middle",
+                    !hideScoreMidVertical && "border-r border-black",
+                    bottomA
+                  )}
+                >
                   <button
                     type="button"
                     className={cn(
