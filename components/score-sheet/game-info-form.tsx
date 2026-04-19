@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { QUARTER_LENGTH_OPTIONS, normalizeQuarterMinutes } from "@/lib/timeout-sheet"
 
 export function GameInfoForm() {
   const { state, updateGameInfo } = useScore()
@@ -29,27 +30,36 @@ export function GameInfoForm() {
           <Label htmlFor="tournamentName">大会名</Label>
           <Input
             id="tournamentName"
-            placeholder="例：令和6年度宮崎県中学校バスケットボール大会"
+            placeholder="例：⚪︎⚪︎バスケットボール大会"
             value={gameInfo.tournamentName}
             onChange={(e) => updateGameInfo({ tournamentName: e.target.value })}
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="quarterMinutes">1クォーターの時間</Label>
+          <Label htmlFor="quarterMinutes" className="flex flex-wrap items-center gap-2">
+            <span>1クォーターの時間（タイムアウトの経過分計算に使用）</span>
+            <span className="rounded-md bg-primary px-2 py-0.5 text-[10px] font-bold leading-none text-primary-foreground">
+              必須
+            </span>
+          </Label>
           <Select
-            value={String(gameInfo.quarterMinutes)}
+            value={String(normalizeQuarterMinutes(gameInfo.quarterMinutes))}
             onValueChange={(value) => updateGameInfo({ quarterMinutes: Number(value) })}
           >
-            <SelectTrigger id="quarterMinutes">
+            <SelectTrigger
+              id="quarterMinutes"
+              className="h-11 w-full border-[3px] border-primary bg-primary/5 font-semibold shadow-sm hover:bg-primary/10 focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/35"
+            >
               <SelectValue placeholder="選択してください" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="6">6分</SelectItem>
-              <SelectItem value="7">7分</SelectItem>
-              <SelectItem value="8">8分（中学標準）</SelectItem>
-              <SelectItem value="10">10分（高校・一般）</SelectItem>
-              <SelectItem value="12">12分</SelectItem>
+              {QUARTER_LENGTH_OPTIONS.map((m) => (
+                <SelectItem key={m} value={String(m)}>
+                  {m}分
+                  {m === 5 ? "（ミニバス等）" : m === 6 ? "（小学等）" : m === 8 ? "（中学等）" : "（高校・一般等）"}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
@@ -68,7 +78,7 @@ export function GameInfoForm() {
             <Label htmlFor="venue">場所</Label>
             <Input
               id="venue"
-              placeholder="例：宮崎市総合体育館"
+              placeholder="例：⚪︎⚪︎体育館"
               value={gameInfo.venue}
               onChange={(e) => updateGameInfo({ venue: e.target.value })}
             />

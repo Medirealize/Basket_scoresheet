@@ -38,7 +38,8 @@ export function RunningScore({ team }: RunningScoreProps) {
 
   const handleAddScore = (points: number) => {
     if (selectedPlayer) {
-      addScore(team, selectedPlayer, points)
+      // +1 は FT として isFreeThrow を付与（ランニング表で／と塗り丸を区別）
+      addScore(team, selectedPlayer, points, points === 3, points === 1)
       setDialogOpen(false)
       setSelectedPlayer("")
     }

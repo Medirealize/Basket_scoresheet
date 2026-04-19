@@ -37,7 +37,7 @@ export function TeamInfoForm({ team }: TeamInfoFormProps) {
             <Label htmlFor={`teamName${team}`}>チーム名</Label>
             <Input
               id={`teamName${team}`}
-              placeholder="例：宮崎中学校"
+              placeholder="例：○○中学校"
               value={teamData.name}
               onChange={(e) => updateTeam({ name: e.target.value })}
             />

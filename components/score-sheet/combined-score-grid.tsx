@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useMemo, useState, useRef } from "react"
 import { useScore } from "@/lib/score-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -19,14 +19,16 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import {
+  RUNNING_SCORE_TEAM_B_BG,
+  getRunningCellMeta,
+  lastRunningScoreByQuarter,
+  quarterSeparatorBottomClassScreen,
+  quarterSeparatorLineStylesByPoint,
+} from "@/lib/running-score-helpers"
 import { Trash2 } from "lucide-react"
 
-type ScoreEntry = {
-  playerNumber: string
-  quarter: number
-  isThreePointer: boolean
-  isFreeThrow: boolean
-}
+type CellMeta = NonNullable<ReturnType<typeof getRunningCellMeta>>
 
 export function CombinedScoreGrid() {
   const { state, getTotalScore, addScore, removeLastScore, toggleQuarterLine, updateScoreEntryPlayer } = useScore()
@@ -46,27 +48,33 @@ export function CombinedScoreGrid() {
 
   const lastCenterTapRef = useRef<Map<number, number>>(new Map())
 
-  const getScoreMap = (team: "A" | "B") => {
-    const entries = state.scoreEntries.filter((e) => e.team === team)
-    const map = new Map<number, ScoreEntry>()
-    entries.forEach((entry) => {
-      for (let i = 0; i < entry.points; i++) {
-        const pointValue = entry.totalScore - (entry.points - 1 - i)
-        map.set(pointValue, {
-          playerNumber: entry.playerNumber,
-          quarter: entry.quarter,
-          isThreePointer: entry.isThreePointer && i === entry.points - 1,
-          isFreeThrow: (entry.isFreeThrow ?? false) && i === 0,
-        })
-      }
-    })
-    return map
-  }
+  const scoreMapA = useMemo(() => {
+    const m = new Map<number, CellMeta>()
+    for (let p = 1; p <= 120; p++) {
+      const c = getRunningCellMeta(state.scoreEntries, "A", p)
+      if (c) m.set(p, c)
+    }
+    return m
+  }, [state.scoreEntries])
+  const scoreMapB = useMemo(() => {
+    const m = new Map<number, CellMeta>()
+    for (let p = 1; p <= 120; p++) {
+      const c = getRunningCellMeta(state.scoreEntries, "B", p)
+      if (c) m.set(p, c)
+    }
+    return m
+  }, [state.scoreEntries])
+  const lastByQ_A = useMemo(() => lastRunningScoreByQuarter(state.scoreEntries, "A"), [state.scoreEntries])
+  const lastByQ_B = useMemo(() => lastRunningScoreByQuarter(state.scoreEntries, "B"), [state.scoreEntries])
 
-  const scoreMapA = getScoreMap("A")
-  const scoreMapB = getScoreMap("B")
   const totalScoreA = getTotalScore("A")
   const totalScoreB = getTotalScore("B")
+  const gameEnded = Boolean(state.winner)
+
+  const quarterLineStylesByPoint = useMemo(
+    () => quarterSeparatorLineStylesByPoint(state.scoreEntries, state.quarterLines),
+    [state.scoreEntries, state.quarterLines]
+  )
 
   const getPlayerList = (team: "A" | "B") => {
     const teamData = team === "A" ? state.teamA : state.teamB
@@ -89,6 +97,8 @@ export function CombinedScoreGrid() {
   const handleTeamClick = (point: number, team: "A" | "B") => {
     const totalScore = team === "A" ? totalScoreA : totalScoreB
     const scoreMap = team === "A" ? scoreMapA : scoreMapB
+    const m0 = scoreMap.get(point)
+    if (m0?.hideJerseyAndScore) return
 
     if (scoreMap.has(point)) {
       const entry = scoreMap.get(point)!
@@ -114,16 +124,9 @@ export function CombinedScoreGrid() {
     const player = resolveAddPlayer()
     if (!player || addPoint === null || !addTeam) return
     const totalScore = addTeam === "A" ? totalScoreA : totalScoreB
-    // FT は必ず1点、2P/3P はセルで決まった点数
     const pointsToAdd = shotType === "FT" ? 1 : addPoint - totalScore
     if (pointsToAdd > 0) {
-      addScore(
-        addTeam,
-        player,
-        pointsToAdd,
-        shotType === "3P",
-        shotType === "FT"
-      )
+      addScore(addTeam, player, pointsToAdd, shotType === "3P", shotType === "FT")
     }
     setAddDialogOpen(false)
     setAddPoint(null)
@@ -144,163 +147,255 @@ export function CombinedScoreGrid() {
     setEditDialogOpen(false)
   }
 
-  // 塗り丸マーカー（背番号入り）
-  const CircleMarker = ({ entry }: { entry: ScoreEntry }) => {
-    const isRed = entry.quarter === 1 || entry.quarter === 3
-    if (entry.isFreeThrow) {
-      // FT: 白抜き丸（外枠のみ）
+  const inkClass = (quarter: number) =>
+    quarter === 1 || quarter === 3 ? "text-red-600" : "text-neutral-900"
+
+  const quarterEndPointsA = useMemo(() => new Set(lastByQ_A.values()), [lastByQ_A])
+  const quarterEndPointsB = useMemo(() => new Set(lastByQ_B.values()), [lastByQ_B])
+  const isQuarterEndScore = (team: "A" | "B", point: number) =>
+    team === "A" ? quarterEndPointsA.has(point) : quarterEndPointsB.has(point)
+
+  const teamGameEndRow = (team: "A" | "B", point: number) =>
+    gameEnded && point === (team === "A" ? totalScoreA : totalScoreB) && (totalScoreA > 0 || totalScoreB > 0)
+
+  const RunningScoreDigit = ({
+    point,
+    meta,
+    isQuarterEnd,
+  }: {
+    point: number
+    meta: CellMeta | undefined
+    isQuarterEnd: boolean
+  }) => {
+    const q = meta?.quarter ?? 1
+    const color = inkClass(q)
+    const fillBg = q === 1 || q === 3 ? "bg-red-600" : "bg-neutral-900"
+
+    if (!meta) {
       return (
-        <div
-          className={cn(
-            "w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center font-bold leading-none",
-            isRed ? "border-red-600 text-red-600" : "border-foreground text-foreground"
-          )}
-          style={{ fontSize: "6px" }}
-        >
-          {entry.playerNumber}
-        </div>
+        <span className="font-mono text-[10px] text-neutral-400 tabular-nums leading-none">{point}</span>
       )
     }
-    if (entry.isThreePointer) {
-      // 3P: 塗り丸 + 外リング
+
+    if (meta.showSlash) {
       return (
-        <div
+        <span
           className={cn(
-            "w-[18px] h-[18px] rounded-full flex items-center justify-center font-bold leading-none ring-2 ring-offset-0",
-            isRed ? "bg-red-600 text-white ring-red-300" : "bg-foreground text-white ring-foreground/40"
+            "relative inline-flex min-h-[1.35rem] min-w-[1.35rem] items-center justify-center overflow-visible font-mono text-[11px] font-semibold tabular-nums leading-none select-none",
+            color,
+            isQuarterEnd && "rounded-full border-[3px] border-current px-0.5 py-0.5"
           )}
-          style={{ fontSize: "6px" }}
         >
-          {entry.playerNumber}
-        </div>
+          <svg
+            className="pointer-events-none absolute left-1/2 top-1/2 z-[5] h-[1.4rem] w-[1.4rem] -translate-x-1/2 -translate-y-1/2 overflow-visible text-current"
+            viewBox="0 0 32 32"
+            aria-hidden
+          >
+            <line
+              x1="4"
+              y1="28"
+              x2="28"
+              y2="4"
+              stroke="currentColor"
+              strokeWidth="2.5"
+              strokeLinecap="square"
+            />
+          </svg>
+          <span className="relative z-10">{point}</span>
+        </span>
       )
     }
-    // 2P: 塗り丸（通常）
-    return (
-      <div
-        className={cn(
-          "w-[18px] h-[18px] rounded-full flex items-center justify-center font-bold leading-none",
-          isRed ? "bg-red-600 text-white" : "bg-foreground text-white"
-        )}
-        style={{ fontSize: "6px" }}
-      >
-        {entry.playerNumber}
-      </div>
-    )
-  }
 
-  // 数字セル（左=Aスラッシュ / 右=Bスラッシュ）
-  const renderNumCell = (
-    point: number,
-    team: "A" | "B",
-    scoreMap: Map<number, ScoreEntry>,
-    totalScore: number,
-    isRightCol: boolean
-  ) => {
-    const entry = scoreMap.get(point)
-    const isScored = !!entry
-    const isNext = !isScored && point === totalScore + 1
-    const isClickable = isScored || point >= totalScore + 1
-
-    return (
-      <div
-        className={cn(
-          "relative flex items-center justify-center h-full select-none touch-manipulation",
-          isClickable ? "cursor-pointer active:brightness-90" : "",
-        )}
-        style={{ flex: 3 }}
-        onClick={() => {
-          if (isRightCol) {
-            handleCenterTap(point)  // ダブルタップ用（右列）
-          }
-          if (isClickable) handleTeamClick(point, team)
-        }}
-      >
-        {/* 未得点: 点数テキスト */}
-        {!isScored && (
-          <span className={cn(
-            "font-mono leading-none select-none",
-            isNext ? "text-[9px] font-bold text-primary" : "text-[9px] text-foreground/55"
-          )}>
+    if (meta.showFilledCircle) {
+      return (
+        <span className={cn("inline-flex rounded-full", color, isQuarterEnd && "border-[3px] border-current p-[1px]")}>
+          <span
+            className={cn(
+              "inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full font-mono text-[9px] font-bold leading-none text-white select-none",
+              fillBg
+            )}
+          >
             {point}
           </span>
-        )}
+        </span>
+      )
+    }
 
-        {/* 得点済み: 塗り丸マーカー */}
-        {isScored && (
-          <CircleMarker entry={entry} />
-        )}
-      </div>
-    )
+    return null
   }
 
-  // 1マクロ列のレンダリング
-  // 構成: [A背景(空)] [左数字(A得点)] [右数字(B得点)] [B背景(空)]
-  const renderColumn = (points: number[]) => (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      {/* ヘッダー */}
-      <div
-        className="border-b-2 border-foreground/50"
-        style={{ display: "flex", height: "20px" }}
-      >
-        <div
-          className="flex items-center justify-center text-[9px] font-bold text-primary bg-primary/10"
-          style={{ flex: 2 }}
-        >
-          A
-        </div>
-        <div
-          className="flex items-center justify-center text-[8px] text-muted-foreground border-l border-border/30"
-          style={{ flex: 3 }}
-        >
-          得点
-        </div>
-        <div
-          className="flex items-center justify-center text-[8px] text-muted-foreground border-l border-border/30"
-          style={{ flex: 3 }}
-        >
-          得点
-        </div>
-        <div
-          className="flex items-center justify-center text-[9px] font-bold text-accent bg-accent/10 border-l border-border/30"
-          style={{ flex: 2 }}
-        >
-          B
-        </div>
-      </div>
+  const cellBtn =
+    "box-border flex min-h-[28px] w-full items-center justify-center px-0.5 py-0 text-[10px] leading-none font-mono font-semibold tabular-nums"
 
-      {/* 行 */}
-      {points.map((point) => {
-        const isQuarterLine = state.quarterLines.includes(point)
-        return (
-          <div
-            key={point}
-            className={isQuarterLine ? "border-b-[3px] border-foreground" : "border-b border-border/40"}
-            style={{ display: "flex", height: "24px" }}
-          >
-            {/* A 背景（空） */}
-            <div className="bg-primary/5" style={{ flex: 2 }} />
+  const renderScoreBlock = (points: number[]) => (
+    <div className="min-w-[7.5rem] flex-1 border border-black bg-white">
+      <table className="w-full border-collapse text-[10px] leading-none [table-layout:fixed]">
+        <colgroup>
+          <col className="w-[22%]" />
+          <col className="w-[28%]" />
+          <col className="w-[28%]" />
+          <col className="w-[22%]" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th className="border-b border-r border-black bg-white px-0 py-1 text-center text-[9px] font-bold">
+              A
+            </th>
+            <th className="border-b border-r border-black bg-white px-0 py-1 text-center text-[8px] font-bold">
+              得点
+            </th>
+            <th
+              className="border-b border-r border-black px-0 py-1 text-center text-[8px] font-bold"
+              style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+            >
+              得点
+            </th>
+            <th
+              className="border-b border-black px-0 py-1 text-center text-[9px] font-bold"
+              style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+            >
+              B
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {points.map((point) => {
+            const metaA = scoreMapA.get(point)
+            const metaB = scoreMapB.get(point)
+            const qEndA = isQuarterEndScore("A", point)
+            const qEndB = isQuarterEndScore("B", point)
+            const sepStyle = quarterLineStylesByPoint.get(point)
+            const endGameA = teamGameEndRow("A", point)
+            const endGameB = teamGameEndRow("B", point)
 
-            {/* 左数字列（A が得点 → 塗り丸） */}
-            <div className="border-l border-border/30" style={{ flex: 3, position: "relative" }}>
-              {renderNumCell(point, "A", scoreMapA, totalScoreA, false)}
-            </div>
+            const bottomA = endGameA
+              ? "border-b-4 border-double border-black"
+              : sepStyle
+                ? quarterSeparatorBottomClassScreen(sepStyle)
+                : "border-b border-black"
+            const bottomB = endGameB
+              ? "border-b-4 border-double border-black"
+              : sepStyle
+                ? quarterSeparatorBottomClassScreen(sepStyle)
+                : "border-b border-black"
 
-            {/* 右数字列（B が得点 → 塗り丸）/ ダブルタップでQ区切り */}
-            <div className="border-l border-border/30" style={{ flex: 3, position: "relative" }}>
-              {renderNumCell(point, "B", scoreMapB, totalScoreB, true)}
-            </div>
+            const clickableA =
+              (!metaA && point >= totalScoreA + 1) || Boolean(metaA && !metaA.hideJerseyAndScore)
+            const clickableB =
+              (!metaB && point >= totalScoreB + 1) || Boolean(metaB && !metaB.hideJerseyAndScore)
 
-            {/* B 背景（空） */}
-            <div className="bg-accent/5 border-l border-border/30" style={{ flex: 2 }} />
-          </div>
-        )
-      })}
+            return (
+              <tr key={point}>
+                <td
+                  className={cn("border-r border-black bg-white p-0 align-middle", bottomA)}
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      cellBtn,
+                      "bg-white",
+                      clickableA ? "cursor-pointer active:bg-neutral-100" : "cursor-default"
+                    )}
+                    onClick={() => clickableA && handleTeamClick(point, "A")}
+                  >
+                    {metaA?.hideJerseyAndScore ? (
+                      <span className="select-none" aria-hidden />
+                    ) : metaA?.circleJersey ? (
+                      <span
+                        className={cn(
+                          "inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full border-[2.5px] border-current font-mono text-[10px] font-bold leading-none",
+                          inkClass(metaA.quarter)
+                        )}
+                      >
+                        {metaA.playerNumber}
+                      </span>
+                    ) : metaA ? (
+                      <span className={cn("text-[10px]", inkClass(metaA.quarter))}>{metaA.playerNumber}</span>
+                    ) : (
+                      <span className="text-transparent select-none">.</span>
+                    )}
+                  </button>
+                </td>
+                <td className={cn("border-r border-black bg-white p-0 align-middle", bottomA)}>
+                  <button
+                    type="button"
+                    className={cn(
+                      cellBtn,
+                      "relative overflow-visible bg-white",
+                      clickableA ? "cursor-pointer active:bg-neutral-100" : "cursor-default"
+                    )}
+                    onClick={() => clickableA && handleTeamClick(point, "A")}
+                  >
+                    {metaA?.hideJerseyAndScore ? null : (
+                      <RunningScoreDigit point={point} meta={metaA} isQuarterEnd={qEndA} />
+                    )}
+                  </button>
+                </td>
+                <td
+                  className={cn("border-r border-black p-0 align-middle", bottomB)}
+                  style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      cellBtn,
+                      "relative overflow-visible",
+                      clickableB ? "cursor-pointer active:brightness-95" : "cursor-default"
+                    )}
+                    style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+                    onClick={() => {
+                      handleCenterTap(point)
+                      if (clickableB) handleTeamClick(point, "B")
+                    }}
+                  >
+                    {metaB?.hideJerseyAndScore ? null : (
+                      <RunningScoreDigit point={point} meta={metaB} isQuarterEnd={qEndB} />
+                    )}
+                  </button>
+                </td>
+                <td
+                  className={cn("p-0 align-middle", bottomB)}
+                  style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+                >
+                  <button
+                    type="button"
+                    className={cn(
+                      cellBtn,
+                      clickableB ? "cursor-pointer active:brightness-95" : "cursor-default"
+                    )}
+                    style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+                    onClick={() => clickableB && handleTeamClick(point, "B")}
+                  >
+                    {metaB?.hideJerseyAndScore ? (
+                      <span className="select-none" aria-hidden />
+                    ) : metaB?.circleJersey ? (
+                      <span
+                        className={cn(
+                          "inline-flex min-h-[18px] min-w-[18px] items-center justify-center rounded-full border-[2.5px] border-current font-mono text-[10px] font-bold leading-none",
+                          inkClass(metaB.quarter)
+                        )}
+                      >
+                        {metaB.playerNumber}
+                      </span>
+                    ) : metaB ? (
+                      <span className={cn("text-[10px]", inkClass(metaB.quarter))}>{metaB.playerNumber}</span>
+                    ) : (
+                      <span className="text-transparent select-none">.</span>
+                    )}
+                  </button>
+                </td>
+              </tr>
+            )
+          })}
+        </tbody>
+      </table>
     </div>
   )
 
-  const col1 = Array.from({ length: 80 }, (_, i) => i + 1)
-  const col2 = Array.from({ length: 80 }, (_, i) => i + 81)
+  const block1 = Array.from({ length: 40 }, (_, i) => i + 1)
+  const block2 = Array.from({ length: 40 }, (_, i) => i + 41)
+  const block3 = Array.from({ length: 40 }, (_, i) => i + 81)
+
   const addPlayerList = addTeam ? getPlayerList(addTeam) : []
   const editPlayerList = editTeam ? getPlayerList(editTeam) : []
 
@@ -344,62 +439,73 @@ export function CombinedScoreGrid() {
   )
 
   return (
-    <Card>
-      <CardHeader className="pb-2">
-        <CardTitle className="text-base text-center">ランニングスコア</CardTitle>
-        <div className="flex items-center justify-between mt-1">
-          <div className="flex items-center gap-1.5">
-            <span className="w-5 h-5 rounded-full bg-primary flex items-center justify-center text-xs font-bold text-primary-foreground shrink-0">A</span>
-            <span className="font-medium text-sm truncate max-w-[6rem]">{state.teamA.name || "チームA"}</span>
-            <span className="text-xl font-bold font-mono">{totalScoreA}</span>
+    <Card className="border-black/80">
+      <CardHeader className="space-y-2 pb-2">
+        <div className="relative flex items-center border-b-2 border-black pb-1.5">
+          <span className="flex-1 text-center text-base font-bold tracking-tight">ランニング・スコア</span>
+          <span className="absolute right-0 top-0 text-[11px] font-semibold tracking-[0.15em] text-neutral-700">
+            RUNNING
+          </span>
+        </div>
+        <div className="flex items-center justify-between gap-2 pt-1">
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-primary-foreground">
+              A
+            </span>
+            <span className="max-w-[6rem] truncate text-sm font-medium">{state.teamA.name || "チームA"}</span>
+            <span className="font-mono text-xl font-bold">{totalScoreA}</span>
           </div>
-          <div className="text-lg text-muted-foreground font-bold">-</div>
-          <div className="flex items-center gap-1.5">
-            <span className="text-xl font-bold font-mono">{totalScoreB}</span>
-            <span className="font-medium text-sm truncate max-w-[6rem] text-right">{state.teamB.name || "チームB"}</span>
-            <span className="w-5 h-5 rounded-full bg-accent flex items-center justify-center text-xs font-bold text-accent-foreground shrink-0">B</span>
+          <div className="text-lg font-bold text-muted-foreground">-</div>
+          <div className="flex min-w-0 items-center gap-1.5">
+            <span className="font-mono text-xl font-bold">{totalScoreB}</span>
+            <span className="max-w-[6rem] truncate text-right text-sm font-medium">{state.teamB.name || "チームB"}</span>
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-accent-foreground">
+              B
+            </span>
           </div>
         </div>
       </CardHeader>
 
       <CardContent className="px-2 pb-3">
-        <div style={{ display: "flex", gap: "4px" }}>
-          {renderColumn(col1)}
-          {renderColumn(col2)}
+        <div className="flex gap-1 overflow-x-auto pb-1 [-webkit-overflow-scrolling:touch]">
+          {renderScoreBlock(block1)}
+          {renderScoreBlock(block2)}
+          {renderScoreBlock(block3)}
         </div>
 
-        {/* 凡例 */}
-        <div className="flex flex-wrap items-center justify-center gap-3 mt-3 text-[10px] text-muted-foreground border-t pt-2">
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded-full bg-foreground" />
-            <span>= 2P（黒丸）</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded-full bg-red-600" />
-            <span>= 1Q/3Q（赤丸）</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded-full bg-foreground ring-2 ring-foreground/40" />
-            <span>= 3P</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <div className="w-4 h-4 rounded-full border-2 border-foreground" />
-            <span>= FT</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="inline-block w-4 border-b-[3px] border-foreground" />
-            <span>= Q区切り（右列ダブルタップ）</span>
-          </div>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-x-3 gap-y-1 border-t pt-2 text-[10px] text-muted-foreground">
+          <span>1Q/3Q＝赤、2Q/4Q/OT＝黒</span>
+          <span>|</span>
+          <span>2P/3P＝成立前マスは空欄、成立点のみ得点に／</span>
+          <span>|</span>
+          <span>3P＝背番号に丸・得点は／のみ</span>
+          <span>|</span>
+          <span>FT・1点＝得点に塗り丸</span>
+          <span>|</span>
+          <span>Q終了＝太い〇＋太い横線（自動）</span>
+          <span>|</span>
+          <span>試合終了＝勝者確定後に二重太線（自動）</span>
+          <span>|</span>
+          <span>補助線＝B得点列ダブルタップ</span>
         </div>
       </CardContent>
 
-      {/* 得点追加ダイアログ */}
       <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-center">
-              <span className={cn("inline-flex items-center gap-1.5", addTeam === "A" ? "text-primary" : "text-accent")}>
-                <span className={cn("w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white", addTeam === "A" ? "bg-primary" : "bg-accent")}>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5",
+                  addTeam === "A" ? "text-primary" : "text-accent"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white",
+                    addTeam === "A" ? "bg-primary" : "bg-accent"
+                  )}
+                >
                   {addTeam}
                 </span>
                 {addTeam === "A" ? state.teamA.name || "チームA" : state.teamB.name || "チームB"}
@@ -449,13 +555,22 @@ export function CombinedScoreGrid() {
         </DialogContent>
       </Dialog>
 
-      {/* 選手修正ダイアログ */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
         <DialogContent className="w-[calc(100vw-2rem)] max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-center">
-              <span className={cn("inline-flex items-center gap-1.5", editTeam === "A" ? "text-primary" : "text-accent")}>
-                <span className={cn("w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white", editTeam === "A" ? "bg-primary" : "bg-accent")}>
+              <span
+                className={cn(
+                  "inline-flex items-center gap-1.5",
+                  editTeam === "A" ? "text-primary" : "text-accent"
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-5 w-5 items-center justify-center rounded-full text-xs font-bold text-white",
+                    editTeam === "A" ? "bg-primary" : "bg-accent"
+                  )}
+                >
                   {editTeam}
                 </span>
                 {editPoint}点目の背番号修正
@@ -473,7 +588,7 @@ export function CombinedScoreGrid() {
             <div className={cn("grid gap-3", editIsLast ? "grid-cols-3" : "grid-cols-1")}>
               {editIsLast && (
                 <Button variant="destructive" className="h-12" onClick={handleDeleteScore}>
-                  <Trash2 className="w-4 h-4" />
+                  <Trash2 className="h-4 w-4" />
                 </Button>
               )}
               <Button

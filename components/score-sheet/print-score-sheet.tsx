@@ -1,6 +1,15 @@
 "use client"
 
+import { useMemo } from "react"
 import { useScore } from "@/lib/score-context"
+import {
+  RUNNING_SCORE_TEAM_B_BG,
+  getRunningCellMeta,
+  lastRunningScoreByQuarter,
+  quarterSeparatorBottomClassPrint,
+  quarterSeparatorLineStylesByPoint,
+} from "@/lib/running-score-helpers"
+import { normalizeQuarterMinutes } from "@/lib/timeout-sheet"
 import { cn } from "@/lib/utils"
 
 export function PrintScoreSheet() {
@@ -9,17 +18,27 @@ export function PrintScoreSheet() {
   const totalScoreA = getTotalScore("A")
   const totalScoreB = getTotalScore("B")
 
-  // ランニングスコア表用のデータを生成
-  const getScoreEntryAtPoint = (team: "A" | "B", point: number) => {
-    const entries = state.scoreEntries.filter((e) => e.team === team)
-    return entries.find((e) => e.totalScore === point)
-  }
+  const runningBlocks = useMemo(
+    () => [
+      Array.from({ length: 40 }, (_, i) => i + 1),
+      Array.from({ length: 40 }, (_, i) => i + 41),
+      Array.from({ length: 40 }, (_, i) => i + 81),
+    ],
+    []
+  )
 
-  // 20点ごとの列データ
-  const columns = Array.from({ length: 8 }, (_, colIndex) => {
-    const startPoint = colIndex * 20 + 1
-    return Array.from({ length: 20 }, (_, rowIndex) => startPoint + rowIndex)
-  })
+  const quarterLineStylesByPoint = useMemo(
+    () => quarterSeparatorLineStylesByPoint(state.scoreEntries, state.quarterLines),
+    [state.scoreEntries, state.quarterLines]
+  )
+  const qEndA = useMemo(
+    () => new Set(lastRunningScoreByQuarter(state.scoreEntries, "A").values()),
+    [state.scoreEntries]
+  )
+  const qEndB = useMemo(
+    () => new Set(lastRunningScoreByQuarter(state.scoreEntries, "B").values()),
+    [state.scoreEntries]
+  )
 
   // クォーターの色を取得
   const getQuarterColor = (quarter: number) => {
@@ -46,7 +65,7 @@ export function PrintScoreSheet() {
     // 前半 (1Q, 2Q)
     teamData.timeouts[0].forEach((t, i) => {
       if (t.used) {
-        details.push(`${t.quarter}Q:${t.time}`)
+        details.push(`${t.quarter}Q経過${t.time}分`)
       } else if (t.cancelled) {
         details.push("--")
       }
@@ -55,7 +74,7 @@ export function PrintScoreSheet() {
     // 後半 (3Q, 4Q)
     teamData.timeouts[1].forEach((t, i) => {
       if (t.used) {
-        details.push(`${t.quarter}Q:${t.time}`)
+        details.push(`${t.quarter}Q経過${t.time}分`)
       } else if (t.cancelled) {
         details.push("--")
       }
@@ -99,7 +118,9 @@ export function PrintScoreSheet() {
         </div>
         <div>
           <span className="font-bold">Q時間: </span>
-          <span className="border-b border-black inline-block min-w-[30px]">{state.gameInfo.quarterMinutes}分</span>
+          <span className="border-b border-black inline-block min-w-[30px]">
+            {normalizeQuarterMinutes(state.gameInfo.quarterMinutes)}分
+          </span>
         </div>
       </div>
 
@@ -186,54 +207,185 @@ export function PrintScoreSheet() {
         </div>
       </div>
 
-      {/* ランニングスコア */}
-      <div className="border border-black mb-2">
-        <div className="bg-gray-200 p-1 font-bold text-center border-b border-black">
-          ランニングスコア
+      {/* ランニングスコア（公式用紙に近い 40×3 ブロック） */}
+      <div className="mb-2 border border-black">
+        <div className="relative border-b border-black bg-gray-100 px-2 py-1 text-center font-bold">
+          <span className="text-[9px]">ランニング・スコア</span>
+          <span className="absolute right-2 top-1 text-[6px] font-semibold tracking-wider">RUNNING</span>
         </div>
-        <div className="grid grid-cols-8 text-[7px]">
-          {columns.map((colPoints, colIndex) => (
-            <div key={colIndex} className={cn("border-r border-black last:border-r-0")}>
-              {/* ヘッダー行 */}
-              <div className="grid grid-cols-3 bg-gray-100 border-b border-black">
-                <div className="text-center p-0.5 border-r border-gray-400 text-[6px]">A</div>
-                <div className="text-center p-0.5 border-r border-gray-400 text-[6px]">点</div>
-                <div className="text-center p-0.5 text-[6px]">B</div>
+        <div className="flex border-b border-black text-[6px]">
+          {runningBlocks.map((colPoints, blockIdx) => (
+            <div
+              key={blockIdx}
+              className={cn("min-w-0 flex-1 border-black", blockIdx < 2 ? "border-r" : "")}
+            >
+              <div className="flex border-b border-black font-bold leading-none">
+                <div className="flex flex-[2] border-r border-black">
+                  <div className="flex w-[22%] items-center justify-center border-r border-black bg-white py-0.5">
+                    A
+                  </div>
+                  <div className="flex flex-1 items-center justify-center bg-white py-0.5">得点</div>
+                </div>
+                <div className="flex flex-[2]">
+                  <div
+                    className="flex flex-1 items-center justify-center border-r border-black py-0.5"
+                    style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+                  >
+                    得点
+                  </div>
+                  <div
+                    className="flex w-[22%] items-center justify-center py-0.5"
+                    style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+                  >
+                    B
+                  </div>
+                </div>
               </div>
               {colPoints.map((point) => {
-                const entryA = getScoreEntryAtPoint("A", point)
-                const entryB = getScoreEntryAtPoint("B", point)
+                const metaA = getRunningCellMeta(state.scoreEntries, "A", point)
+                const metaB = getRunningCellMeta(state.scoreEntries, "B", point)
+                const sepStyle = quarterLineStylesByPoint.get(point)
+                const gameDone = Boolean(state.winner)
+                const endA = gameDone && point === totalScoreA && totalScoreA + totalScoreB > 0
+                const endB = gameDone && point === totalScoreB && totalScoreA + totalScoreB > 0
+                const bottomA = endA
+                  ? "border-b-2 border-double border-black"
+                  : sepStyle
+                    ? quarterSeparatorBottomClassPrint(sepStyle)
+                    : "border-b border-gray-200"
+                const bottomB = endB
+                  ? "border-b-2 border-double border-black"
+                  : sepStyle
+                    ? quarterSeparatorBottomClassPrint(sepStyle)
+                    : "border-b border-gray-200"
+
+                const renderScore = (meta: ReturnType<typeof getRunningCellMeta>, qEnd: boolean) => {
+                  if (!meta) {
+                    return <span className="text-gray-400">{point}</span>
+                  }
+                  if (meta.hideJerseyAndScore) {
+                    return <span className="select-none" />
+                  }
+                  const fillBg = meta.quarter === 1 || meta.quarter === 3 ? "bg-red-600" : "bg-black"
+                  if (meta.showSlash) {
+                    return (
+                      <span
+                        className={cn(
+                          "relative inline-flex min-h-[0.65rem] min-w-[0.65rem] items-center justify-center overflow-visible font-mono font-semibold",
+                          getQuarterColor(meta.quarter),
+                          qEnd && "rounded-full border-[1.5px] border-current px-[1px]"
+                        )}
+                      >
+                        <svg
+                          className="pointer-events-none absolute left-1/2 top-1/2 z-[5] h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 text-current"
+                          viewBox="0 0 32 32"
+                          aria-hidden
+                        >
+                          <line
+                            x1="4"
+                            y1="28"
+                            x2="28"
+                            y2="4"
+                            stroke="currentColor"
+                            strokeWidth="3"
+                            strokeLinecap="square"
+                          />
+                        </svg>
+                        <span className="relative z-10">{point}</span>
+                      </span>
+                    )
+                  }
+                  if (meta.showFilledCircle) {
+                    return (
+                      <span
+                        className={cn(
+                          "inline-flex rounded-full",
+                          getQuarterColor(meta.quarter),
+                          qEnd && "border-[1.5px] border-current p-[0.5px]"
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "inline-flex min-h-[10px] min-w-[10px] items-center justify-center rounded-full font-mono text-[6px] font-bold leading-none text-white",
+                            fillBg
+                          )}
+                        >
+                          {point}
+                        </span>
+                      </span>
+                    )
+                  }
+                  return <span className="select-none" />
+                }
+
                 return (
-                  <div key={point} className="grid grid-cols-3 border-b border-gray-200 h-3">
-                    <div className={cn(
-                      "text-center border-r border-gray-300 font-mono",
-                      entryA && getQuarterColor(entryA.quarter)
-                    )}>
-                      {entryA && (
-                        entryA.isThreePointer ? (
-                          <span className="border border-current rounded-full px-0.5 text-[6px]">{entryA.playerNumber}</span>
-                        ) : (
-                          <span className="text-[6px]">{entryA.playerNumber}</span>
-                        )
+                  <div key={point} className="flex min-h-[10px] leading-none">
+                    <div
+                      className={cn(
+                        "flex w-[22%] items-center justify-center border-r border-black bg-white font-mono",
+                        bottomA
+                      )}
+                    >
+                      {metaA?.hideJerseyAndScore ? (
+                        <span className="select-none" />
+                      ) : metaA?.circleJersey ? (
+                        <span
+                          className={cn(
+                            "inline-flex min-h-[10px] min-w-[10px] items-center justify-center rounded-full border border-current font-mono text-[6px] font-bold",
+                            getQuarterColor(metaA.quarter)
+                          )}
+                        >
+                          {metaA.playerNumber}
+                        </span>
+                      ) : metaA ? (
+                        <span className={cn("text-[6px]", getQuarterColor(metaA.quarter))}>
+                          {metaA.playerNumber}
+                        </span>
+                      ) : (
+                        <span className="text-transparent">.</span>
                       )}
                     </div>
-                    <div className={cn(
-                      "text-center border-r border-gray-300 font-mono",
-                      entryA && "line-through",
-                      entryB && "line-through"
-                    )}>
-                      {point}
+                    <div
+                      className={cn(
+                        "flex flex-1 items-center justify-center border-r border-black bg-white",
+                        bottomA
+                      )}
+                    >
+                      {renderScore(metaA, qEndA.has(point))}
                     </div>
-                    <div className={cn(
-                      "text-center font-mono",
-                      entryB && getQuarterColor(entryB.quarter)
-                    )}>
-                      {entryB && (
-                        entryB.isThreePointer ? (
-                          <span className="border border-current rounded-full px-0.5 text-[6px]">{entryB.playerNumber}</span>
-                        ) : (
-                          <span className="text-[6px]">{entryB.playerNumber}</span>
-                        )
+                    <div
+                      className={cn(
+                        "flex flex-1 items-center justify-center border-r border-black",
+                        bottomB
+                      )}
+                      style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+                    >
+                      {renderScore(metaB, qEndB.has(point))}
+                    </div>
+                    <div
+                      className={cn(
+                        "flex w-[22%] items-center justify-center font-mono",
+                        bottomB
+                      )}
+                      style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
+                    >
+                      {metaB?.hideJerseyAndScore ? (
+                        <span className="select-none" />
+                      ) : metaB?.circleJersey ? (
+                        <span
+                          className={cn(
+                            "inline-flex min-h-[10px] min-w-[10px] items-center justify-center rounded-full border border-current font-mono text-[6px] font-bold",
+                            getQuarterColor(metaB.quarter)
+                          )}
+                        >
+                          {metaB.playerNumber}
+                        </span>
+                      ) : metaB ? (
+                        <span className={cn("text-[6px]", getQuarterColor(metaB.quarter))}>
+                          {metaB.playerNumber}
+                        </span>
+                      ) : (
+                        <span className="text-transparent">.</span>
                       )}
                     </div>
                   </div>

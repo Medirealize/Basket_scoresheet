@@ -1,6 +1,7 @@
 "use client"
 
 import { createContext, useContext, useState, type ReactNode } from "react"
+import { normalizeQuarterMinutes } from "@/lib/timeout-sheet"
 
 export type FoulType = "P" | "P1" | "P2" | "P3" | "T" | "T1" | "U" | "U1" | "U2" | "D" | "C" | "B" | "GD" | ""
 
@@ -22,7 +23,8 @@ export interface Player {
 export interface TimeoutRecord {
   used: boolean
   cancelled: boolean // 使用しなかった場合（二重線表示）
-  time: string // 残り時間（例: "5:30"）
+  /** スコアシート記入用の経過分数（整数・分）。コロの残りから換算して保存 */
+  time: string
   quarter: number // どのクォーターで使ったか
 }
 
@@ -46,7 +48,7 @@ export interface GameInfo {
   gameNumber: string
   programPage: string
   block: string
-  quarterMinutes: number // 1クォーターの時間（分）：8, 10など
+  quarterMinutes: number // 1クォーターの時間（分）：5 / 6 / 8 / 10 のいずれか（タイムアウト換算用）
 }
 
 export interface Officials {
@@ -129,7 +131,7 @@ const initialState: ScoreState = {
     gameNumber: "",
     programPage: "",
     block: "",
-    quarterMinutes: 8, // デフォルト8分（中学）
+    quarterMinutes: normalizeQuarterMinutes(8),
   },
   teamA: initialTeam(),
   teamB: initialTeam(),
@@ -178,10 +180,13 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<ScoreState>(initialState)
 
   const updateGameInfo = (info: Partial<GameInfo>) => {
-    setState((prev) => ({
-      ...prev,
-      gameInfo: { ...prev.gameInfo, ...info },
-    }))
+    setState((prev) => {
+      const gameInfo = { ...prev.gameInfo, ...info }
+      if (info.quarterMinutes !== undefined) {
+        gameInfo.quarterMinutes = normalizeQuarterMinutes(info.quarterMinutes)
+      }
+      return { ...prev, gameInfo }
+    })
   }
 
   const updateTeamA = (team: Partial<TeamData>) => {

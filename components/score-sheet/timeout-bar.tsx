@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useScore, type TimeoutRecord } from "@/lib/score-context"
+import { formatElapsedMinutesForTimeoutCell, normalizeQuarterMinutes } from "@/lib/timeout-sheet"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import {
@@ -19,8 +20,9 @@ export function TimeoutBar() {
   const [selectedHalf, setSelectedHalf] = useState(0)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [selectedQuarter, setSelectedQuarter] = useState(1)
+  const [remainingSec30, setRemainingSec30] = useState<0 | 30>(0)
 
-  const quarterMinutes = state.gameInfo.quarterMinutes || 8
+  const quarterMinutes = normalizeQuarterMinutes(state.gameInfo.quarterMinutes)
 
   const handleTimeoutClick = (team: "A" | "B", half: number, index: number, record: TimeoutRecord, quarter: number) => {
     if (record.used || record.cancelled) {
@@ -36,12 +38,15 @@ export function TimeoutBar() {
       setSelectedHalf(half)
       setSelectedIndex(index)
       setSelectedQuarter(quarter)
+      setRemainingSec30(0)
       setDialogOpen(true)
     }
   }
 
-  const handleSelectTime = (time: string) => {
-    useTimeout(selectedTeam, selectedHalf, selectedIndex, time, selectedQuarter)
+  const handleSelectRemainingMinutes = (remainingMin: number) => {
+    const sec: 0 | 30 = remainingMin >= quarterMinutes ? 0 : remainingSec30
+    const elapsedCell = formatElapsedMinutesForTimeoutCell(quarterMinutes, remainingMin, sec)
+    useTimeout(selectedTeam, selectedHalf, selectedIndex, elapsedCell, selectedQuarter)
     setDialogOpen(false)
   }
 
@@ -55,13 +60,11 @@ export function TimeoutBar() {
     return `${selectedQuarter}Q`
   }
 
-  // クォーター時間に基づいた時間選択肢を生成
-  const getTimeOptions = (): string[] => {
-    const options: string[] = []
-    for (let i = quarterMinutes; i >= 1; i--) {
-      options.push(String(i))
-    }
-    return options
+  /** コロ上の「残り分数」（0 = 終了直前） */
+  const getRemainingMinuteOptions = (): number[] => {
+    const out: number[] = []
+    for (let r = quarterMinutes; r >= 0; r--) out.push(r)
+    return out
   }
 
   // 1Q, 3Qは赤字、2Q, 4Qは黒字
@@ -154,7 +157,13 @@ export function TimeoutBar() {
       </Card>
 
       {/* 時間選択ダイアログ */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          if (open) setRemainingSec30(0)
+          setDialogOpen(open)
+        }}
+      >
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-center">
@@ -168,18 +177,47 @@ export function TimeoutBar() {
             <p className="text-center text-sm text-muted-foreground">
               {selectedTeam === "A" ? state.teamA.name || "チームA" : state.teamB.name || "チームB"}
             </p>
-            
+            <p className="text-center text-xs text-muted-foreground leading-snug">
+              1ピリオド {quarterMinutes} 分のとき、<strong>コロ上の残り時間</strong>を選びます。
+              <br />
+              枠には<strong>経過した分数</strong>（例: 残り4:00→「6」）が入ります。
+            </p>
+
+            <div className="flex justify-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={remainingSec30 === 0 ? "default" : "outline"}
+                className="h-8 px-3"
+                onClick={() => setRemainingSec30(0)}
+              >
+                残り秒 0
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={remainingSec30 === 30 ? "default" : "outline"}
+                className="h-8 px-3"
+                onClick={() => setRemainingSec30(30)}
+              >
+                ＋30秒
+              </Button>
+            </div>
+
             <div className="space-y-2">
-              <label className="text-sm font-medium text-center block">残り時間（分）を選択</label>
-              <div className="grid grid-cols-5 gap-2">
-                {getTimeOptions().map((time) => (
+              <label className="block text-center text-sm font-medium">
+                残り分数（残り{quarterMinutes}:00 から 0:00）
+              </label>
+              <div className="grid max-h-[220px] grid-cols-4 gap-1.5 overflow-y-auto pr-1">
+                {getRemainingMinuteOptions().map((r) => (
                   <Button
-                    key={time}
+                    key={r}
+                    type="button"
                     variant="outline"
-                    className={cn("h-10 text-lg font-mono", getQuarterTextColor(selectedQuarter))}
-                    onClick={() => handleSelectTime(time)}
+                    className={cn("h-9 font-mono text-sm", getQuarterTextColor(selectedQuarter))}
+                    onClick={() => handleSelectRemainingMinutes(r)}
                   >
-                    {time}
+                    {r}
                   </Button>
                 ))}
               </div>

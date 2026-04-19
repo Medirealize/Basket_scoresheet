@@ -8,7 +8,6 @@ import { PlayerRosterForm } from "./player-roster-form"
 import { RunningScore } from "./running-score"
 import { CombinedScoreGrid } from "./combined-score-grid"
 import { QuarterControl } from "./quarter-control"
-import { TimeoutFoulPanel } from "./timeout-foul-panel"
 import { TimeoutBar } from "./timeout-bar"
 import { OfficialsForm } from "./officials-form"
 import { FinalResultPanel } from "./final-result-panel"
@@ -27,13 +26,11 @@ import {
 } from "@/components/ui/alert-dialog"
 import {
   ClipboardList,
-  Users,
   Timer,
   Trophy,
   RotateCcw,
   Info,
   User,
-  Clock,
 } from "lucide-react"
 
 function ScoreSheetContent() {
@@ -77,6 +74,20 @@ function ScoreSheetContent() {
       {/* メインコンテンツ */}
       <main className="max-w-4xl mx-auto pb-24">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsContent value="info" className="mt-0 space-y-4 p-4">
+            <GameInfoForm />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <TeamInfoForm team="A" />
+              <TeamInfoForm team="B" />
+            </div>
+            <OfficialsForm />
+          </TabsContent>
+
+          <TabsContent value="players" className="mt-0 space-y-4 p-4">
+            <PlayerRosterForm team="A" />
+            <PlayerRosterForm team="B" />
+          </TabsContent>
+
           <TabsContent value="score" className="mt-0 space-y-4 p-4">
             <QuarterControl />
             {/* タイムアウトバー */}
@@ -89,67 +100,39 @@ function ScoreSheetContent() {
             <CombinedScoreGrid />
           </TabsContent>
 
-          <TabsContent value="players" className="mt-0 space-y-4 p-4">
-            <PlayerRosterForm team="A" />
-            <PlayerRosterForm team="B" />
-          </TabsContent>
-
-          <TabsContent value="info" className="mt-0 space-y-4 p-4">
-            <GameInfoForm />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <TeamInfoForm team="A" />
-              <TeamInfoForm team="B" />
-            </div>
-            <OfficialsForm />
-          </TabsContent>
-
-          <TabsContent value="timeout" className="mt-0 space-y-4 p-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <TimeoutFoulPanel team="A" />
-              <TimeoutFoulPanel team="B" />
-            </div>
-          </TabsContent>
-
           <TabsContent value="result" className="mt-0 space-y-4 p-4">
             <FinalResultPanel />
           </TabsContent>
 
-          {/* ボトムナビゲーション - 順番変更: スコア, 選手, 試合情報, TO, 結果 */}
-          <TabsList className="fixed bottom-0 left-0 right-0 h-auto p-2 bg-card border-t rounded-none grid grid-cols-5 gap-1 z-20">
+          {/* ボトムナビ: 試合情報, 選手, スコア, 結果（TOはスコア画面のバーで操作） */}
+          <TabsList className="fixed bottom-0 left-0 right-0 z-20 grid h-auto grid-cols-4 gap-1 rounded-none border-t bg-card p-2">
             <TabsTrigger
-              value="score"
-              className="flex flex-col gap-1 h-14 bg-orange-500 text-white data-[state=active]:bg-orange-600 data-[state=active]:text-white hover:bg-orange-600"
+              value="info"
+              className="flex h-14 flex-col gap-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             >
-              <Timer className="h-5 w-5" />
-              <span className="text-[10px] font-bold">スコア</span>
+              <Info className="h-5 w-5" />
+              <span className="text-[10px] font-bold">試合情報</span>
             </TabsTrigger>
             <TabsTrigger
               value="players"
-              className="flex flex-col gap-1 h-14 bg-blue-500 text-white data-[state=active]:bg-blue-600 data-[state=active]:text-white hover:bg-blue-600"
+              className="flex h-14 flex-col gap-1 bg-blue-500 text-white hover:bg-blue-600 data-[state=active]:bg-blue-600 data-[state=active]:text-white"
             >
               <User className="h-5 w-5" />
               <span className="text-[10px] font-bold">選手</span>
             </TabsTrigger>
             <TabsTrigger
-              value="info"
-              className="flex flex-col gap-1 h-14 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              value="score"
+              className="flex h-14 flex-col gap-1 bg-orange-500 text-white hover:bg-orange-600 data-[state=active]:bg-orange-600 data-[state=active]:text-white"
             >
-              <Info className="h-5 w-5" />
-              <span className="text-[10px]">試合情報</span>
-            </TabsTrigger>
-            <TabsTrigger
-              value="timeout"
-              className="flex flex-col gap-1 h-14 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              <Clock className="h-5 w-5" />
-              <span className="text-[10px]">TO</span>
+              <Timer className="h-5 w-5" />
+              <span className="text-[10px] font-bold">スコア</span>
             </TabsTrigger>
             <TabsTrigger
               value="result"
-              className="flex flex-col gap-1 h-14 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
+              className="flex h-14 flex-col gap-1 data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
             >
               <Trophy className="h-5 w-5" />
-              <span className="text-[10px]">結果</span>
+              <span className="text-[10px] font-bold">結果</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>

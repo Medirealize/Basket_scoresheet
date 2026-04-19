@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
+  DialogClose,
   DialogContent,
   DialogHeader,
   DialogTitle,
@@ -106,11 +107,8 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                   isFouledOut && "bg-destructive/10 border-destructive/30"
                 )}
               >
-                {/* メイン行 - 常に表示 */}
-                <div 
-                  className="flex items-center gap-2 p-2 cursor-pointer"
-                  onClick={() => setExpandedPlayer(isExpanded ? null : index)}
-                >
+                {/* メイン行 - 展開は右の「ファウル」ボタンのみ（行全体クリックだと展開中に誤って閉じたりダイアログ操作と干渉する） */}
+                <div className="flex items-center gap-2 p-2">
                   {/* 出場チェック */}
                   <Checkbox
                     checked={player.isPlaying}
@@ -142,41 +140,41 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                     )}
                   </div>
 
-                  {/* 氏名 */}
-                  <Input
-                    placeholder="選手名"
-                    className="flex-1 h-8 text-sm min-w-0"
-                    value={player.name}
-                    onChange={(e) => updatePlayer(team, index, { name: e.target.value })}
-                    onClick={(e) => e.stopPropagation()}
-                  />
+                  {/* 氏名（背番号〜展開ボタンの間で広がりすぎないよう上限幅） */}
+                  <div className="min-w-0 flex-1 flex justify-start">
+                    <Input
+                      placeholder="選手名"
+                      className="h-8 w-full max-w-[9rem] text-sm sm:max-w-[11rem]"
+                      value={player.name}
+                      onChange={(e) => updatePlayer(team, index, { name: e.target.value })}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </div>
 
-                  {/* ファウル数バッジ */}
-                  {hasFouls && (
-                    <Badge 
-                      variant={isFouledOut ? "destructive" : "secondary"}
-                      className="shrink-0 text-xs px-1.5"
-                    >
-                      F{player.fouls.length}
-                    </Badge>
-                  )}
-
-                  {/* 展開アイコン */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-8 w-8 p-0 shrink-0"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      setExpandedPlayer(isExpanded ? null : index)
-                    }}
+                  {/* ファウル（件数・展開で入力）— ここだけが開閉トグル */}
+                  <button
+                    type="button"
+                    className="ml-auto flex h-8 shrink-0 items-center gap-1.5 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    aria-expanded={isExpanded}
+                    aria-label={isExpanded ? "ファウル欄を閉じる" : "ファウル欄を開いて入力"}
+                    title="ファウルの表示・追加"
+                    onClick={() => setExpandedPlayer(isExpanded ? null : index)}
                   >
-                    {isExpanded ? (
-                      <ChevronUp className="h-4 w-4" />
-                    ) : (
-                      <ChevronDown className="h-4 w-4" />
+                    {hasFouls && (
+                      <Badge
+                        variant={isFouledOut ? "destructive" : "secondary"}
+                        className="pointer-events-none shrink-0 text-xs px-1.5"
+                      >
+                        F{player.fouls.length}
+                      </Badge>
                     )}
-                  </Button>
+                    <span className="text-[10px] font-medium leading-none sm:text-xs">ファウル</span>
+                    {isExpanded ? (
+                      <ChevronUp className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+                    ) : (
+                      <ChevronDown className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+                    )}
+                  </button>
                 </div>
 
                 {/* 展開時の詳細 */}
@@ -272,20 +270,22 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                             </DialogHeader>
                             <div className="grid grid-cols-3 gap-2 pt-2">
                               {FOUL_TYPES.map((foul) => (
-                                <Button
-                                  key={foul.value}
-                                  variant="outline"
-                                  className={cn(
-                                    "h-14 flex flex-col gap-0.5 p-1",
-                                    getQuarterTextColor(state.currentQuarter)
-                                  )}
-                                  onClick={() => handleFoulAdd(index, foul.value)}
-                                >
-                                  <span className="font-bold text-lg">{foul.label}</span>
-                                  <span className="text-[9px] text-muted-foreground leading-tight">
-                                    {foul.description}
-                                  </span>
-                                </Button>
+                                <DialogClose key={foul.value} asChild>
+                                  <Button
+                                    type="button"
+                                    variant="outline"
+                                    className={cn(
+                                      "h-14 flex flex-col gap-0.5 p-1",
+                                      getQuarterTextColor(state.currentQuarter)
+                                    )}
+                                    onClick={() => handleFoulAdd(index, foul.value)}
+                                  >
+                                    <span className="font-bold text-lg">{foul.label}</span>
+                                    <span className="text-[9px] text-muted-foreground leading-tight">
+                                      {foul.description}
+                                    </span>
+                                  </Button>
+                                </DialogClose>
                               ))}
                             </div>
                           </DialogContent>
