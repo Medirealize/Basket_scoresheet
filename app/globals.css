@@ -1,4 +1,6 @@
 @import 'tailwindcss';
+/* lib 内のユーティリティ文字列もクラス抽出対象に（foul-display 等） */
+@source "../lib/**/*.ts";
 @import 'tw-animate-css';
 
 @custom-variant dark (&:is(.dark *));

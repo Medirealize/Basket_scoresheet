@@ -29,7 +29,8 @@ export function RunningScoreGrid({ team }: RunningScoreGridProps) {
   
   const [dialogOpen, setDialogOpen] = useState(false)
   const [selectedPoint, setSelectedPoint] = useState<number | null>(null)
-  const [selectedPlayer, setSelectedPlayer] = useState<string>("")
+  /** チーム内ロスターインデックス（背番号の重複でも一意） */
+  const [selectedRosterIndex, setSelectedRosterIndex] = useState<string>("")
 
   // 得点履歴から各スコアに対応するエントリを取得
   const scoreEntries = state.scoreEntries.filter((e) => e.team === team)
@@ -54,8 +55,14 @@ export function RunningScoreGrid({ team }: RunningScoreGridProps) {
 
   const totalScore = getTotalScore(team)
   const activePlayers = teamData.players.filter((p) => p.number && p.isPlaying)
-  const allPlayers = teamData.players.filter((p) => p.number)
-  const playerList = activePlayers.length > 0 ? activePlayers : allPlayers
+
+  const selectPlayerOptions = teamData.players
+    .map((player, rosterIndex) => ({ player, rosterIndex }))
+    .filter(({ player }) => {
+      if (!player.number) return false
+      if (activePlayers.length > 0) return Boolean(player.isPlaying)
+      return true
+    })
 
   // クォーターの色を取得（1Q/3Qは赤、2Q/4Qは黒/青）
   const getQuarterTextColor = (quarter: number) => {
@@ -73,25 +80,28 @@ export function RunningScoreGrid({ team }: RunningScoreGridProps) {
     // 次の得点可能な点数以降をタップした場合のみダイアログを開く
     if (point >= nextAvailablePoint) {
       setSelectedPoint(point)
-      setSelectedPlayer("")
+      setSelectedRosterIndex("")
       setDialogOpen(true)
     }
   }
 
   // 得点を追加（通常の2ポイントまたは1ポイント）
   const handleAddScore = (isThreePointer: boolean) => {
-    if (!selectedPlayer || selectedPoint === null) return
-    
+    if (selectedRosterIndex === "" || selectedPoint === null) return
+    const idx = Number(selectedRosterIndex)
+    const player = teamData.players[idx]
+    if (!player?.number) return
+
     // 選択された点までの得点を計算
     const pointsToAdd = selectedPoint - totalScore
-    
+
     if (pointsToAdd > 0) {
-      addScore(team, selectedPlayer, pointsToAdd, isThreePointer)
+      addScore(team, player.number, pointsToAdd, isThreePointer)
     }
-    
+
     setDialogOpen(false)
     setSelectedPoint(null)
-    setSelectedPlayer("")
+    setSelectedRosterIndex("")
   }
 
   // 10点ごとのグリッドを作成（1-10, 11-20, ... 151-160）
@@ -232,7 +242,13 @@ export function RunningScoreGrid({ team }: RunningScoreGridProps) {
       </CardContent>
 
       {/* 得点入力ダイアログ */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+      <Dialog
+        open={dialogOpen}
+        onOpenChange={(open) => {
+          setDialogOpen(open)
+          if (!open) setSelectedRosterIndex("")
+        }}
+      >
         <DialogContent className="max-w-xs">
           <DialogHeader>
             <DialogTitle className="text-center">
@@ -243,14 +259,14 @@ export function RunningScoreGrid({ team }: RunningScoreGridProps) {
             {/* 選手選択 */}
             <div className="space-y-2">
               <label className="text-sm font-medium">得点した選手</label>
-              <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
+              <Select value={selectedRosterIndex} onValueChange={setSelectedRosterIndex}>
                 <SelectTrigger>
                   <SelectValue placeholder="背番号を選択" />
                 </SelectTrigger>
                 <SelectContent>
-                  {playerList.map((player) => (
-                    <SelectItem key={player.number} value={player.number}>
-                      #{player.number} {player.name}
+                  {selectPlayerOptions.map(({ player, rosterIndex }) => (
+                    <SelectItem key={rosterIndex} value={String(rosterIndex)}>
+                      #{player.number} {player.name || "（氏名なし）"}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -263,7 +279,7 @@ export function RunningScoreGrid({ team }: RunningScoreGridProps) {
                 variant="outline"
                 className="h-16 text-lg font-bold"
                 onClick={() => handleAddScore(false)}
-                disabled={!selectedPlayer}
+                disabled={selectedRosterIndex === ""}
               >
                 通常
                 <span className="text-xs text-muted-foreground ml-1">(FT/2P)</span>
@@ -272,7 +288,7 @@ export function RunningScoreGrid({ team }: RunningScoreGridProps) {
                 variant="outline"
                 className="h-16 text-lg font-bold border-2 border-primary"
                 onClick={() => handleAddScore(true)}
-                disabled={!selectedPlayer}
+                disabled={selectedRosterIndex === ""}
               >
                 <span className="border-2 border-current rounded-full px-2 py-1">3P</span>
               </Button>

@@ -30,19 +30,29 @@ interface RunningScoreProps {
 export function RunningScore({ team }: RunningScoreProps) {
   const { state, addScore, removeLastScore, getTotalScore, getQuarterScore } = useScore()
   const teamData = team === "A" ? state.teamA : state.teamB
-  const [selectedPlayer, setSelectedPlayer] = useState<string>("")
+  /** チーム内の選手配列インデックス（背番号の重複でも一意） */
+  const [selectedRosterIndex, setSelectedRosterIndex] = useState<string>("")
   const [dialogOpen, setDialogOpen] = useState(false)
 
   const activePlayers = teamData.players.filter((p) => p.number && p.isPlaying)
-  const allPlayers = teamData.players.filter((p) => p.number)
+
+  const selectPlayerOptions = teamData.players
+    .map((player, rosterIndex) => ({ player, rosterIndex }))
+    .filter(({ player }) => {
+      if (!player.number) return false
+      if (activePlayers.length > 0) return Boolean(player.isPlaying)
+      return true
+    })
 
   const handleAddScore = (points: number) => {
-    if (selectedPlayer) {
-      // +1 は FT として isFreeThrow を付与（ランニング表で／と塗り丸を区別）
-      addScore(team, selectedPlayer, points, points === 3, points === 1)
-      setDialogOpen(false)
-      setSelectedPlayer("")
-    }
+    if (selectedRosterIndex === "") return
+    const idx = Number(selectedRosterIndex)
+    const player = teamData.players[idx]
+    if (!player?.number) return
+    // +1 は FT として isFreeThrow を付与（ランニング表で／と塗り丸を区別）
+    addScore(team, player.number, points, points === 3, points === 1)
+    setDialogOpen(false)
+    setSelectedRosterIndex("")
   }
 
   const currentQuarterEntries = state.scoreEntries.filter(
@@ -100,7 +110,13 @@ export function RunningScore({ team }: RunningScoreProps) {
         </div>
 
         {/* 得点追加ダイアログ */}
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <Dialog
+          open={dialogOpen}
+          onOpenChange={(open) => {
+            setDialogOpen(open)
+            if (!open) setSelectedRosterIndex("")
+          }}
+        >
           <DialogTrigger asChild>
             <Button
               type="button"
@@ -123,14 +139,14 @@ export function RunningScore({ team }: RunningScoreProps) {
               {/* 選手選択 */}
               <div className="space-y-2">
                 <label className="text-sm font-medium">得点した選手</label>
-                <Select value={selectedPlayer} onValueChange={setSelectedPlayer}>
+                <Select value={selectedRosterIndex} onValueChange={setSelectedRosterIndex}>
                   <SelectTrigger>
                     <SelectValue placeholder="選手を選択" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(activePlayers.length > 0 ? activePlayers : allPlayers).map((player) => (
-                      <SelectItem key={player.number} value={player.number}>
-                        #{player.number} {player.name}
+                    {selectPlayerOptions.map(({ player, rosterIndex }) => (
+                      <SelectItem key={rosterIndex} value={String(rosterIndex)}>
+                        #{player.number} {player.name || "（氏名なし）"}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -143,7 +159,7 @@ export function RunningScore({ team }: RunningScoreProps) {
                   variant="outline"
                   className="h-16 text-xl font-bold flex-col gap-0.5"
                   onClick={() => handleAddScore(1)}
-                  disabled={!selectedPlayer}
+                  disabled={selectedRosterIndex === ""}
                 >
                   <span>+1</span>
                   <span className="text-[10px] text-muted-foreground font-normal">FT</span>
@@ -152,7 +168,7 @@ export function RunningScore({ team }: RunningScoreProps) {
                   variant="outline"
                   className="h-16 text-xl font-bold"
                   onClick={() => handleAddScore(2)}
-                  disabled={!selectedPlayer}
+                  disabled={selectedRosterIndex === ""}
                 >
                   +2
                 </Button>
@@ -160,7 +176,7 @@ export function RunningScore({ team }: RunningScoreProps) {
                   variant="outline"
                   className="h-16 text-xl font-bold"
                   onClick={() => handleAddScore(3)}
-                  disabled={!selectedPlayer}
+                  disabled={selectedRosterIndex === ""}
                 >
                   +3
                 </Button>

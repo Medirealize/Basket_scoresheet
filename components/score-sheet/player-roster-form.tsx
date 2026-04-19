@@ -18,6 +18,7 @@ import {
 import { cn } from "@/lib/utils"
 import { Plus, Minus, ChevronDown, ChevronUp } from "lucide-react"
 import { TeamFoulCounter } from "./team-foul-counter"
+import { foulBadgeClassList, foulQuarterGapBefore } from "@/lib/foul-display"
 
 interface PlayerRosterFormProps {
   team: "A" | "B"
@@ -44,13 +45,13 @@ const getQuarterTextColor = (quarter: number) => {
   return "text-foreground"
 }
 
-// 各Q間に太黒線を引くかどうか（Q番号が変わったら線を引く）
-const shouldShowQuarterSeparator = (fouls: FoulRecord[], index: number) => {
-  if (index === 0) return false
-  const currentFoul = fouls[index]
-  const prevFoul = fouls[index - 1]
-  // クォーターが変わったら線を引く
-  return currentFoul.quarter !== prevFoul.quarter
+function FoulQuarterDivider({ fouls, foulIndex }: { fouls: FoulRecord[]; foulIndex: number }) {
+  const gap = foulQuarterGapBefore(fouls, foulIndex)
+  if (gap === "none") return null
+  if (gap === "thick-black") {
+    return <div className="mr-1 h-7 w-[3px] shrink-0 rounded-[1px] bg-black" aria-hidden />
+  }
+  return <div className="mr-1 h-6 w-px shrink-0 bg-neutral-500" aria-hidden />
 }
 
 export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
@@ -151,7 +152,29 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                     />
                   </div>
 
-                  {/* ファウル（件数・展開で入力）— ここだけが開閉トグル */}
+                  {/* ファウル回数（氏名とファウルボタンの間） */}
+                  <div
+                    className={cn(
+                      "flex shrink-0 flex-col items-center justify-center rounded border px-1.5 py-0.5 tabular-nums leading-none",
+                      isFouledOut
+                        ? "border-destructive/50 bg-destructive/10"
+                        : "border-muted-foreground/25 bg-muted/40"
+                    )}
+                    aria-label={`ファウル回数 ${player.fouls.length}、上限5`}
+                  >
+                    <span className="text-[8px] font-medium text-muted-foreground">回数</span>
+                    <span
+                      className={cn(
+                        "text-xs font-bold",
+                        isFouledOut ? "text-destructive" : hasFouls ? "text-foreground" : "text-muted-foreground"
+                      )}
+                    >
+                      {player.fouls.length}
+                      <span className="text-[9px] font-normal text-muted-foreground">/5</span>
+                    </span>
+                  </div>
+
+                  {/* ファウル（展開で入力）— ここだけが開閉トグル */}
                   <button
                     type="button"
                     className="ml-auto flex h-8 shrink-0 items-center gap-1.5 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
@@ -160,14 +183,6 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                     title="ファウルの表示・追加"
                     onClick={() => setExpandedPlayer(isExpanded ? null : index)}
                   >
-                    {hasFouls && (
-                      <Badge
-                        variant={isFouledOut ? "destructive" : "secondary"}
-                        className="pointer-events-none shrink-0 text-xs px-1.5"
-                      >
-                        F{player.fouls.length}
-                      </Badge>
-                    )}
                     <span className="text-[10px] font-medium leading-none sm:text-xs">ファウル</span>
                     {isExpanded ? (
                       <ChevronUp className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
@@ -217,20 +232,8 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                       <div className="flex gap-1 flex-wrap items-center">
                         {player.fouls.map((foul, foulIndex) => (
                           <div key={foulIndex} className="flex items-center">
-                            {/* Q間の区切り太黒線 */}
-                            {shouldShowQuarterSeparator(player.fouls, foulIndex) && (
-                              <div className="w-0.5 h-6 bg-foreground mr-1" />
-                            )}
-                            <Badge
-                              variant={foul.type.startsWith("U") || foul.type === "D" ? "destructive" : "outline"}
-                              className={cn(
-                                "text-sm px-2 py-0.5 font-bold",
-                                getQuarterTextColor(foul.quarter),
-                                foul.type.startsWith("U") || foul.type === "D" ? "" : "bg-background"
-                              )}
-                            >
-                              {foul.type}
-                            </Badge>
+                            <FoulQuarterDivider fouls={player.fouls} foulIndex={foulIndex} />
+                            <span className={foulBadgeClassList(foul.quarter, foul.type)}>{foul.type}</span>
                           </div>
                         ))}
                         {Array.from({ length: 5 - player.fouls.length }).map((_, i) => (

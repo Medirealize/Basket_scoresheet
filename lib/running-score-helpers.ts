@@ -83,6 +83,16 @@ function quarterSeparatorLineStyleForQuarterNumber(q: number): QuarterSeparatorL
   return "black-thick"
 }
 
+function maxRunningTotalForTeam(entries: ScoreEntry[], team: "A" | "B"): number {
+  let m = 0
+  for (const e of entries) {
+    if (e.team !== team) continue
+    const t = Number(e.totalScore)
+    if (Number.isFinite(t)) m = Math.max(m, t)
+  }
+  return m
+}
+
 /** 指定チームの得点列だけに引くQ間太線（そのチームの各Q終了累計点の行） */
 export function quarterSeparatorLineStylesForTeam(
   entries: ScoreEntry[],
@@ -99,8 +109,11 @@ export function quarterSeparatorLineStylesForTeam(
     map.set(row, quarterSeparatorLineStyleForQuarterNumber(q))
   }
 
+  const teamMax = maxRunningTotalForTeam(entries, team)
   for (const p of manualLinePoints) {
-    if (!map.has(p)) map.set(p, "black-thick")
+    if (map.has(p)) continue
+    // 手動線は「そのチームの得点がその行まで届いている」ときのみ（得点の多い側だけに線が出るのを防ぐ）
+    if (teamMax >= p) map.set(p, "black-thick")
   }
   return map
 }

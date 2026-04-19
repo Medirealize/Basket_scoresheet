@@ -80,11 +80,23 @@ export function CombinedScoreGrid() {
     [state.scoreEntries, state.quarterLines]
   )
 
-  const getPlayerList = (team: "A" | "B") => {
+  /** 得点追加は出場中優先、修正は背番号付き全員（ロスターインデックスで一意に選択） */
+  const getPlayerSelectOptions = (team: "A" | "B", forEdit: boolean) => {
     const teamData = team === "A" ? state.teamA : state.teamB
     const active = teamData.players.filter((p) => p.number && p.isPlaying)
-    const all = teamData.players.filter((p) => p.number)
-    return active.length > 0 ? active : all
+    const useActiveOnly = !forEdit && active.length > 0
+    return teamData.players
+      .map((player, rosterIndex) => ({ player, rosterIndex }))
+      .filter(({ player }) => {
+        if (!player.number) return false
+        if (useActiveOnly) return Boolean(player.isPlaying)
+        return true
+      })
+      .map(({ player, rosterIndex }) => ({
+        number: player.number,
+        name: player.name,
+        rosterIndex,
+      }))
   }
 
   const handleCenterTap = (point: number) => {
@@ -108,7 +120,9 @@ export function CombinedScoreGrid() {
       const entry = scoreMap.get(point)!
       setEditPoint(point)
       setEditTeam(team)
-      setEditPlayer(entry.playerNumber)
+      const roster = team === "A" ? state.teamA.players : state.teamB.players
+      const ri = roster.findIndex((p) => p.number === entry.playerNumber)
+      setEditPlayer(ri >= 0 ? String(ri) : "")
       setEditPlayerManual(entry.playerNumber)
       setEditIsLast(point === totalScore)
       setEditDialogOpen(true)
@@ -121,8 +135,25 @@ export function CombinedScoreGrid() {
     }
   }
 
-  const resolveAddPlayer = () => addPlayer || addPlayerManual.trim()
-  const resolveEditPlayer = () => editPlayer || editPlayerManual.trim()
+  const resolveAddPlayer = () => {
+    const manual = addPlayerManual.trim()
+    if (manual) return manual
+    if (addPlayer === "" || !addTeam) return ""
+    const idx = Number(addPlayer)
+    if (!Number.isFinite(idx)) return addPlayer
+    const roster = addTeam === "A" ? state.teamA.players : state.teamB.players
+    return roster[idx]?.number ?? ""
+  }
+
+  const resolveEditPlayer = () => {
+    const manual = editPlayerManual.trim()
+    if (manual) return manual
+    if (editPlayer === "" || !editTeam) return ""
+    const idx = Number(editPlayer)
+    if (!Number.isFinite(idx)) return editPlayer
+    const roster = editTeam === "A" ? state.teamA.players : state.teamB.players
+    return roster[idx]?.number ?? ""
+  }
 
   const handleAddScore = (shotType: "FT" | "2P" | "3P") => {
     const player = resolveAddPlayer()
@@ -411,8 +442,8 @@ export function CombinedScoreGrid() {
   const block2 = Array.from({ length: 40 }, (_, i) => i + 41)
   const block3 = Array.from({ length: 40 }, (_, i) => i + 81)
 
-  const addPlayerList = addTeam ? getPlayerList(addTeam) : []
-  const editPlayerList = editTeam ? getPlayerList(editTeam) : []
+  const addPlayerList = addTeam ? getPlayerSelectOptions(addTeam, false) : []
+  const editPlayerList = editTeam ? getPlayerSelectOptions(editTeam, true) : []
 
   const PlayerSelectUI = ({
     playerList,
@@ -421,7 +452,7 @@ export function CombinedScoreGrid() {
     manual,
     onManual,
   }: {
-    playerList: { number: string; name: string }[]
+    playerList: { number: string; name: string; rosterIndex: number }[]
     selected: string
     onSelect: (v: string) => void
     manual: string
@@ -436,8 +467,8 @@ export function CombinedScoreGrid() {
           </SelectTrigger>
           <SelectContent>
             {playerList.map((p) => (
-              <SelectItem key={p.number} value={p.number}>
-                #{p.number} {p.name}
+              <SelectItem key={p.rosterIndex} value={String(p.rosterIndex)}>
+                #{p.number} {p.name || "（氏名なし）"}
               </SelectItem>
             ))}
           </SelectContent>

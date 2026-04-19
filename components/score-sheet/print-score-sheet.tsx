@@ -1,7 +1,8 @@
 "use client"
 
 import { useMemo } from "react"
-import { useScore } from "@/lib/score-context"
+import { useScore, type FoulRecord } from "@/lib/score-context"
+import { foulBadgeClassListPrint, foulQuarterGapBefore } from "@/lib/foul-display"
 import {
   RUNNING_SCORE_TEAM_B_BG,
   getRunningCellMeta,
@@ -48,6 +49,38 @@ export function PrintScoreSheet() {
   const getQuarterColor = (quarter: number) => {
     return quarter === 1 || quarter === 3 ? "text-red-600" : "text-black"
   }
+
+  const renderFoulsPrint = (fouls: FoulRecord[]) => (
+    <span className="inline-flex flex-wrap items-center justify-center gap-y-0.5 leading-none">
+      {fouls.map((f, i) => (
+        <span key={i} className="inline-flex items-center align-middle">
+          {(() => {
+            const g = foulQuarterGapBefore(fouls, i)
+            if (g === "thick-black") {
+              return (
+                <span
+                  className="mx-px inline-block h-[10px] w-[2px] shrink-0 bg-black align-middle"
+                  aria-hidden
+                />
+              )
+            }
+            if (g === "thin") {
+              return (
+                <span
+                  className="mx-0.5 inline-block h-[10px] w-px shrink-0 bg-neutral-600 align-middle"
+                  aria-hidden
+                />
+              )
+            }
+            return null
+          })()}
+          <span className={cn(foulBadgeClassListPrint(f.quarter, f.type), "align-middle text-[7px]")}>
+            {f.type}
+          </span>
+        </span>
+      ))}
+    </span>
+  )
 
   // 登録済み選手のみ取得
   const getActivePlayers = (team: "A" | "B") => {
@@ -154,16 +187,7 @@ export function PrintScoreSheet() {
                   <td className="border-r border-black text-center p-0.5 font-mono">{player.number}</td>
                   <td className="border-r border-black p-0.5">{player.name}</td>
                   <td className="border-r border-black text-center p-0.5">{player.isCaptain ? "●" : ""}</td>
-                  <td className="p-0.5 text-center font-mono">
-                    {player.fouls.map((f, i) => (
-                      <span key={i} className={cn(
-                        "mr-0.5",
-                        getQuarterColor(f.quarter)
-                      )}>
-                        {f.type}
-                      </span>
-                    ))}
-                  </td>
+                  <td className="p-0.5 text-center font-mono">{renderFoulsPrint(player.fouls)}</td>
                 </tr>
               ))}
             </tbody>
@@ -194,16 +218,7 @@ export function PrintScoreSheet() {
                   <td className="border-r border-black text-center p-0.5 font-mono">{player.number}</td>
                   <td className="border-r border-black p-0.5">{player.name}</td>
                   <td className="border-r border-black text-center p-0.5">{player.isCaptain ? "●" : ""}</td>
-                  <td className="p-0.5 text-center font-mono">
-                    {player.fouls.map((f, i) => (
-                      <span key={i} className={cn(
-                        "mr-0.5",
-                        getQuarterColor(f.quarter)
-                      )}>
-                        {f.type}
-                      </span>
-                    ))}
-                  </td>
+                  <td className="p-0.5 text-center font-mono">{renderFoulsPrint(player.fouls)}</td>
                 </tr>
               ))}
             </tbody>
