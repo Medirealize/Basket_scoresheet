@@ -36,6 +36,16 @@ import {
 function ScoreSheetContent() {
   const { resetState } = useScore()
   const [activeTab, setActiveTab] = useState("score")
+  
+  const jumpToFoulSelection = (team: "A" | "B") => {
+    setActiveTab("players")
+    window.setTimeout(() => {
+      document.getElementById(`players-team-${team}`)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      })
+    }, 120)
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -92,6 +102,23 @@ function ScoreSheetContent() {
             <QuarterControl />
             {/* タイムアウトバー */}
             <TimeoutBar />
+            {/* TO とランニングスコアの間：ファウル入力（選手画面）へのショートカット */}
+            <div className="grid grid-cols-2 gap-2">
+              <Button
+                type="button"
+                onClick={() => jumpToFoulSelection("A")}
+                className="h-11 rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+              >
+                A ファウル入力
+              </Button>
+              <Button
+                type="button"
+                onClick={() => jumpToFoulSelection("B")}
+                className="h-11 rounded-md bg-accent text-accent-foreground hover:bg-accent/90"
+              >
+                B ファウル入力
+              </Button>
+            </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <RunningScore team="A" />
               <RunningScore team="B" />

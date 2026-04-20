@@ -69,10 +69,13 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
   const registeredCount = teamData.players.filter(p => p.number).length
 
   return (
-    <Card className={cn(
-      "border-l-4",
-      team === "A" ? "border-l-primary" : "border-l-accent"
-    )}>
+    <Card
+      id={`players-team-${team}`}
+      className={cn(
+        "border-l-4",
+        team === "A" ? "border-l-primary" : "border-l-accent"
+      )}
+    >
       <CardHeader className="pb-2 px-3">
         <div className="flex flex-col gap-2">
           <div className="flex items-center justify-between">
@@ -174,20 +177,25 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                     </span>
                   </div>
 
-                  {/* ファウル（展開で入力）— ここだけが開閉トグル */}
+                  {/* ファウル（展開で入力）— チーム色のトグル */}
                   <button
                     type="button"
-                    className="ml-auto flex h-8 shrink-0 items-center gap-1.5 rounded-md px-1 text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+                    className={cn(
+                      "ml-auto flex h-8 shrink-0 items-center gap-1 rounded-md px-2 text-[10px] font-semibold leading-none shadow-none transition-colors focus-visible:outline-none focus-visible:ring-2 sm:text-xs",
+                      team === "A"
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90 focus-visible:ring-primary/45"
+                        : "bg-accent text-white hover:bg-accent/90 hover:text-white focus-visible:ring-accent/45"
+                    )}
                     aria-expanded={isExpanded}
                     aria-label={isExpanded ? "ファウル欄を閉じる" : "ファウル欄を開いて入力"}
                     title="ファウルの表示・追加"
                     onClick={() => setExpandedPlayer(isExpanded ? null : index)}
                   >
-                    <span className="text-[10px] font-medium leading-none sm:text-xs">ファウル</span>
+                    <span>ファウル</span>
                     {isExpanded ? (
-                      <ChevronUp className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+                      <ChevronUp className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
                     ) : (
-                      <ChevronDown className="h-4 w-4 shrink-0 opacity-70" aria-hidden />
+                      <ChevronDown className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
                     )}
                   </button>
                 </div>
@@ -246,14 +254,22 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                         ))}
                       </div>
 
-                      {/* ファウル追加ボタン */}
-                      {!isFouledOut && player.number && (
+                      {/* ファウル追加（背番号なし時は表示したまま無効化 — 消えたように見えないようにする） */}
+                      {!isFouledOut && (
                         <Dialog>
                           <DialogTrigger asChild>
                             <Button
-                              variant="outline"
+                              type="button"
+                              variant="default"
                               size="sm"
-                              className="w-full h-9"
+                              disabled={!player.number}
+                              className={cn(
+                                "w-full h-9 shadow-none disabled:opacity-50",
+                                team === "A" &&
+                                  "bg-primary text-primary-foreground hover:bg-primary/90 enabled:hover:text-primary-foreground",
+                                team === "B" &&
+                                  "border-transparent bg-accent text-white hover:bg-accent/90 enabled:hover:text-white"
+                              )}
                             >
                               <Plus className="h-4 w-4 mr-2" />
                               ファウル追加 (Q{state.currentQuarter})
@@ -293,6 +309,11 @@ export function PlayerRosterForm({ team }: PlayerRosterFormProps) {
                             </div>
                           </DialogContent>
                         </Dialog>
+                      )}
+                      {!isFouledOut && !player.number && (
+                        <p className="text-center text-[10px] text-muted-foreground">
+                          ファウルを付けるには背番号を入力してください
+                        </p>
                       )}
                     </div>
                   </div>

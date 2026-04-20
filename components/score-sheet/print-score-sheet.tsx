@@ -15,7 +15,6 @@ import { cn } from "@/lib/utils"
 
 export function PrintScoreSheet() {
   const { state, getTotalScore, getQuarterScore } = useScore()
-
   const totalScoreA = getTotalScore("A")
   const totalScoreB = getTotalScore("B")
 
@@ -24,6 +23,7 @@ export function PrintScoreSheet() {
       Array.from({ length: 40 }, (_, i) => i + 1),
       Array.from({ length: 40 }, (_, i) => i + 41),
       Array.from({ length: 40 }, (_, i) => i + 81),
+      Array.from({ length: 40 }, (_, i) => i + 121),
     ],
     []
   )
@@ -45,10 +45,56 @@ export function PrintScoreSheet() {
     [state.scoreEntries]
   )
 
-  // クォーターの色を取得
   const getQuarterColor = (quarter: number) => {
     return quarter === 1 || quarter === 3 ? "text-red-600" : "text-black"
   }
+
+  const toDisplay = (value?: string) => (value && value.trim() ? value : " ")
+
+  const getPlayerRows = (team: "A" | "B") => {
+    const players = team === "A" ? state.teamA.players : state.teamB.players
+    const active = players.filter((p) => p.number || p.name).slice(0, 18)
+    const blanks = Array.from({ length: Math.max(0, 18 - active.length) }, () => ({
+      number: "",
+      name: "",
+      isCaptain: false,
+      fouls: [] as FoulRecord[],
+    }))
+    return [...active, ...blanks]
+  }
+
+  const getTeamFoulValue = (team: "A" | "B", quarter: number) => {
+    const teamData = team === "A" ? state.teamA : state.teamB
+    return teamData.teamFouls[quarter - 1]?.[0] ?? 0
+  }
+
+  const getTimeoutStamp = (team: "A" | "B", half: 0 | 1, index: number) => {
+    const teamData = team === "A" ? state.teamA : state.teamB
+    const row = teamData.timeouts[half]?.[index]
+    if (!row) return ""
+    if (row.used) {
+      return `${row.quarter}Q ${row.time}`
+    }
+    if (row.cancelled) {
+      return "×"
+    }
+    return ""
+  }
+
+  const timeoutCellClass =
+    "flex h-[4.5mm] items-center justify-center border border-black font-mono text-[7px] leading-none"
+  const foulCellClass =
+    "flex h-[4.5mm] items-center justify-center border border-black text-[7px] leading-none"
+
+  const renderTeamFoulCells = (count: number) =>
+    Array.from({ length: 4 }, (_, i) => {
+      const slot = i + 1
+      return (
+        <span key={slot} className={foulCellClass}>
+          {count >= slot ? "●" : slot}
+        </span>
+      )
+    })
 
   const renderFoulsPrint = (fouls: FoulRecord[]) => (
     <span className="inline-flex flex-wrap items-center justify-center gap-y-0.5 leading-none">
@@ -82,455 +128,384 @@ export function PrintScoreSheet() {
     </span>
   )
 
-  // 登録済み選手のみ取得
-  const getActivePlayers = (team: "A" | "B") => {
-    const players = team === "A" ? state.teamA.players : state.teamB.players
-    return players.filter(p => p.number || p.name)
-  }
-
-  // タイムアウト使用数を取得
-  const getTimeoutCount = (team: "A" | "B", half: number) => {
+  const renderTeamPanel = (team: "A" | "B") => {
     const teamData = team === "A" ? state.teamA : state.teamB
-    return teamData.timeouts[half].filter(t => t.used).length
-  }
+    const rows = getPlayerRows(team)
 
-  // タイムアウトの詳細を取得
-  const getTimeoutDetails = (team: "A" | "B") => {
-    const teamData = team === "A" ? state.teamA : state.teamB
-    const details: string[] = []
-    
-    // 前半 (1Q, 2Q)
-    teamData.timeouts[0].forEach((t, i) => {
-      if (t.used) {
-        details.push(`${t.quarter}Q経過${t.time}分`)
-      } else if (t.cancelled) {
-        details.push("--")
-      }
-    })
-    
-    // 後半 (3Q, 4Q)
-    teamData.timeouts[1].forEach((t, i) => {
-      if (t.used) {
-        details.push(`${t.quarter}Q経過${t.time}分`)
-      } else if (t.cancelled) {
-        details.push("--")
-      }
-    })
-    
-    return details.join(" / ")
-  }
+    return (
+      <div className="border-x border-b border-black">
+        <div className="border-b border-black px-1 py-0.5 text-[10px] font-bold">チーム{team}：</div>
 
-  return (
-    <div className="print-score-sheet bg-white text-black p-4 text-[10px] leading-tight">
-      {/* ヘッダー */}
-      <div className="text-center border-b-2 border-black pb-2 mb-2">
-        <h1 className="text-base font-bold">バスケットボール スコアシート</h1>
-      </div>
-
-      {/* 試合情報 */}
-      <div className="grid grid-cols-4 gap-2 mb-2 border border-black p-2">
-        <div className="col-span-2">
-          <span className="font-bold">大会名: </span>
-          <span className="border-b border-black inline-block min-w-[150px]">{state.gameInfo.tournamentName}</span>
-        </div>
-        <div>
-          <span className="font-bold">試合番号: </span>
-          <span className="border-b border-black inline-block min-w-[50px]">{state.gameInfo.gameNumber}</span>
-        </div>
-        <div>
-          <span className="font-bold">日付: </span>
-          <span className="border-b border-black inline-block min-w-[80px]">{state.gameInfo.date}</span>
-        </div>
-        <div>
-          <span className="font-bold">会場: </span>
-          <span className="border-b border-black inline-block min-w-[100px]">{state.gameInfo.venue}</span>
-        </div>
-        <div>
-          <span className="font-bold">開始: </span>
-          <span className="border-b border-black inline-block min-w-[50px]">{state.gameInfo.startTime}</span>
-        </div>
-        <div>
-          <span className="font-bold">終了: </span>
-          <span className="border-b border-black inline-block min-w-[50px]">{state.gameInfo.endTime}</span>
-        </div>
-        <div>
-          <span className="font-bold">Q時間: </span>
-          <span className="border-b border-black inline-block min-w-[30px]">
-            {normalizeQuarterMinutes(state.gameInfo.quarterMinutes)}分
-          </span>
-        </div>
-      </div>
-
-      {/* チーム情報と選手一覧 */}
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        {/* チームA */}
-        <div className="border border-black">
-          <div className="bg-gray-200 p-1 font-bold text-center border-b border-black">
-            チームA: {state.teamA.name || "―"}
-          </div>
-          <div className="p-1 border-b border-black text-[9px]">
-            <span>コーチ: {state.teamA.coach || "―"}</span>
-            <span className="ml-2">Aコーチ: {state.teamA.assistantCoach || "―"}</span>
-          </div>
-          <table className="w-full text-[8px]">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border-r border-black w-8 p-0.5">No.</th>
-                <th className="border-r border-black p-0.5">氏名</th>
-                <th className="border-r border-black w-6 p-0.5">C</th>
-                <th className="w-24 p-0.5">ファウル</th>
-              </tr>
-            </thead>
-            <tbody>
-              {getActivePlayers("A").slice(0, 12).map((player, index) => (
-                <tr key={index} className="border-t border-gray-300">
-                  <td className="border-r border-black text-center p-0.5 font-mono">{player.number}</td>
-                  <td className="border-r border-black p-0.5">{player.name}</td>
-                  <td className="border-r border-black text-center p-0.5">{player.isCaptain ? "●" : ""}</td>
-                  <td className="p-0.5 text-center font-mono">{renderFoulsPrint(player.fouls)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* チームB */}
-        <div className="border border-black">
-          <div className="bg-gray-200 p-1 font-bold text-center border-b border-black">
-            チームB: {state.teamB.name || "―"}
-          </div>
-          <div className="p-1 border-b border-black text-[9px]">
-            <span>コーチ: {state.teamB.coach || "―"}</span>
-            <span className="ml-2">Aコーチ: {state.teamB.assistantCoach || "―"}</span>
-          </div>
-          <table className="w-full text-[8px]">
-            <thead>
-              <tr className="bg-gray-100">
-                <th className="border-r border-black w-8 p-0.5">No.</th>
-                <th className="border-r border-black p-0.5">氏名</th>
-                <th className="border-r border-black w-6 p-0.5">C</th>
-                <th className="w-24 p-0.5">ファウル</th>
-              </tr>
-            </thead>
-            <tbody>
-              {getActivePlayers("B").slice(0, 12).map((player, index) => (
-                <tr key={index} className="border-t border-gray-300">
-                  <td className="border-r border-black text-center p-0.5 font-mono">{player.number}</td>
-                  <td className="border-r border-black p-0.5">{player.name}</td>
-                  <td className="border-r border-black text-center p-0.5">{player.isCaptain ? "●" : ""}</td>
-                  <td className="p-0.5 text-center font-mono">{renderFoulsPrint(player.fouls)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* ランニングスコア（公式用紙に近い 40×3 ブロック） */}
-      <div className="mb-2 border border-black">
-        <div className="relative border-b border-black bg-gray-100 px-2 py-1 text-center font-bold">
-          <span className="text-[9px]">ランニング・スコア</span>
-          <span className="absolute right-2 top-1 text-[6px] font-semibold tracking-wider">RUNNING</span>
-        </div>
-        <div className="flex border-b border-black text-[6px]">
-          {runningBlocks.map((colPoints, blockIdx) => (
-            <div
-              key={blockIdx}
-              className={cn("min-w-0 flex-1 border-black", blockIdx < 2 ? "border-r" : "")}
-            >
-              <div className="flex border-b border-black font-bold leading-none">
-                <div className="flex flex-[2] border-r border-black">
-                  <div className="flex w-[22%] items-center justify-center border-r border-black bg-white py-0.5">
-                    A
-                  </div>
-                  <div className="flex flex-1 items-center justify-center bg-white py-0.5">得点</div>
-                </div>
-                <div className="flex flex-[2]">
-                  <div
-                    className="flex flex-1 items-center justify-center border-r border-black py-0.5"
-                    style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
-                  >
-                    得点
-                  </div>
-                  <div
-                    className="flex w-[22%] items-center justify-center py-0.5"
-                    style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
-                  >
-                    B
-                  </div>
-                </div>
-              </div>
-              {colPoints.map((point) => {
-                const metaA = getRunningCellMeta(state.scoreEntries, "A", point)
-                const metaB = getRunningCellMeta(state.scoreEntries, "B", point)
-                const sepStyleA = quarterLineStylesA.get(point)
-                const sepStyleB = quarterLineStylesB.get(point)
-                const gameDone = Boolean(state.winner)
-                const endA = gameDone && point === totalScoreA && totalScoreA + totalScoreB > 0
-                const endB = gameDone && point === totalScoreB && totalScoreA + totalScoreB > 0
-                const bottomA = endA
-                  ? "border-b-2 border-double border-black"
-                  : sepStyleA
-                    ? quarterSeparatorBottomClassPrint(sepStyleA)
-                    : "border-b border-gray-200"
-                const bottomB = endB
-                  ? "border-b-2 border-double border-black"
-                  : sepStyleB
-                    ? quarterSeparatorBottomClassPrint(sepStyleB)
-                    : "border-b border-gray-200"
-
-                /** 太い横線の行では A得点|B得点 間の縦線を消し、横線だけが通るようにする */
-                const hideScoreMidVertical =
-                  Boolean(sepStyleA || sepStyleB) || endA || endB
-
-                const renderScore = (meta: ReturnType<typeof getRunningCellMeta>, qEnd: boolean) => {
-                  if (!meta) {
-                    return <span className="text-gray-400">{point}</span>
-                  }
-                  if (meta.hideJerseyAndScore) {
-                    return <span className="select-none" />
-                  }
-                  const fillBg = meta.quarter === 1 || meta.quarter === 3 ? "bg-red-600" : "bg-black"
-                  if (meta.showSlash) {
-                    return (
-                      <span
-                        className={cn(
-                          "relative inline-flex min-h-[0.65rem] min-w-[0.65rem] items-center justify-center overflow-visible font-mono font-semibold",
-                          getQuarterColor(meta.quarter),
-                          qEnd && "rounded-full border-[1.5px] border-current px-[1px]"
-                        )}
-                      >
-                        <svg
-                          className="pointer-events-none absolute left-1/2 top-1/2 z-[5] h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 text-current"
-                          viewBox="0 0 32 32"
-                          aria-hidden
-                        >
-                          <line
-                            x1="4"
-                            y1="28"
-                            x2="28"
-                            y2="4"
-                            stroke="currentColor"
-                            strokeWidth="3"
-                            strokeLinecap="square"
-                          />
-                        </svg>
-                        <span className="relative z-10">{point}</span>
-                      </span>
-                    )
-                  }
-                  if (meta.showFilledCircle) {
-                    return (
-                      <span
-                        className={cn(
-                          "inline-flex rounded-full",
-                          getQuarterColor(meta.quarter),
-                          qEnd && "border-[1.5px] border-current p-[0.5px]"
-                        )}
-                      >
-                        <span
-                          className={cn(
-                            "inline-flex min-h-[10px] min-w-[10px] items-center justify-center rounded-full font-mono text-[6px] font-bold leading-none text-white",
-                            fillBg
-                          )}
-                        >
-                          {point}
-                        </span>
-                      </span>
-                    )
-                  }
-                  return <span className="select-none" />
-                }
-
-                return (
-                  <div key={point} className="flex min-h-[10px] leading-none">
-                    <div
-                      className={cn(
-                        "flex w-[22%] items-center justify-center border-r border-black bg-white font-mono",
-                        bottomA
-                      )}
-                    >
-                      {metaA?.hideJerseyAndScore ? (
-                        <span className="select-none" />
-                      ) : metaA?.circleJersey ? (
-                        <span
-                          className={cn(
-                            "inline-flex min-h-[10px] min-w-[10px] items-center justify-center rounded-full border border-current font-mono text-[6px] font-bold",
-                            getQuarterColor(metaA.quarter)
-                          )}
-                        >
-                          {metaA.playerNumber}
-                        </span>
-                      ) : metaA ? (
-                        <span className={cn("text-[6px]", getQuarterColor(metaA.quarter))}>
-                          {metaA.playerNumber}
-                        </span>
-                      ) : (
-                        <span className="text-transparent">.</span>
-                      )}
-                    </div>
-                    <div
-                      className={cn(
-                        "flex flex-1 items-center justify-center bg-white",
-                        !hideScoreMidVertical && "border-r border-black",
-                        bottomA
-                      )}
-                    >
-                      {renderScore(metaA, qEndA.has(point))}
-                    </div>
-                    <div
-                      className={cn(
-                        "flex flex-1 items-center justify-center border-r border-black",
-                        bottomB
-                      )}
-                      style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
-                    >
-                      {renderScore(metaB, qEndB.has(point))}
-                    </div>
-                    <div
-                      className={cn(
-                        "flex w-[22%] items-center justify-center font-mono",
-                        bottomB
-                      )}
-                      style={{ backgroundColor: RUNNING_SCORE_TEAM_B_BG }}
-                    >
-                      {metaB?.hideJerseyAndScore ? (
-                        <span className="select-none" />
-                      ) : metaB?.circleJersey ? (
-                        <span
-                          className={cn(
-                            "inline-flex min-h-[10px] min-w-[10px] items-center justify-center rounded-full border border-current font-mono text-[6px] font-bold",
-                            getQuarterColor(metaB.quarter)
-                          )}
-                        >
-                          {metaB.playerNumber}
-                        </span>
-                      ) : metaB ? (
-                        <span className={cn("text-[6px]", getQuarterColor(metaB.quarter))}>
-                          {metaB.playerNumber}
-                        </span>
-                      ) : (
-                        <span className="text-transparent">.</span>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+        <div className="border-b border-black px-1 py-0.5 text-[8px]">
+          <div className="grid grid-cols-[56px_1fr] items-center gap-x-1">
+            <div className="font-bold">タイムアウト</div>
+            <div className="grid grid-cols-[16px_repeat(2,1fr)_16px_repeat(3,1fr)] gap-x-0.5 text-center">
+              <span className="text-[7px] font-bold">1P</span>
+              <span className={timeoutCellClass}>{getTimeoutStamp(team, 0, 0)}</span>
+              <span className={timeoutCellClass}>{getTimeoutStamp(team, 0, 1)}</span>
+              <span className="text-[7px] font-bold">3P</span>
+              <span className={timeoutCellClass}>{getTimeoutStamp(team, 1, 0)}</span>
+              <span className={timeoutCellClass}>{getTimeoutStamp(team, 1, 1)}</span>
+              <span className={timeoutCellClass}>{getTimeoutStamp(team, 1, 2)}</span>
             </div>
-          ))}
+          </div>
         </div>
-      </div>
 
-      {/* タイムアウト・チームファウル */}
-      <div className="grid grid-cols-2 gap-2 mb-2">
-        <div className="border border-black p-2">
-          <div className="font-bold mb-1">タイムアウト</div>
-          <div className="grid grid-cols-2 gap-2 text-[8px]">
-            <div>
-              <span className="font-bold">チームA:</span>
-              <div className="mt-0.5">
-                <div>前半(1Q,2Q): {getTimeoutCount("A", 0)}/2</div>
-                <div>後半(3Q,4Q): {getTimeoutCount("A", 1)}/3</div>
-                <div className="text-[7px] text-gray-600">{getTimeoutDetails("A")}</div>
+        <div className="border-b border-black px-1 py-0.5 text-[8px]">
+          <div className="grid grid-cols-[56px_1fr] items-start gap-x-1">
+            <div className="pt-[1px] font-bold">チームファウル</div>
+            <div className="space-y-0.5">
+              <div className="grid grid-cols-[16px_repeat(4,1fr)_16px_repeat(4,1fr)] gap-x-0.5 text-center">
+                <span className="text-[7px] font-bold">1P</span>
+                {renderTeamFoulCells(getTeamFoulValue(team, 1))}
+                <span className="text-[7px] font-bold">2P</span>
+                {renderTeamFoulCells(getTeamFoulValue(team, 2))}
               </div>
-            </div>
-            <div>
-              <span className="font-bold">チームB:</span>
-              <div className="mt-0.5">
-                <div>前半(1Q,2Q): {getTimeoutCount("B", 0)}/2</div>
-                <div>後半(3Q,4Q): {getTimeoutCount("B", 1)}/3</div>
-                <div className="text-[7px] text-gray-600">{getTimeoutDetails("B")}</div>
+              <div className="grid grid-cols-[16px_repeat(4,1fr)_16px_repeat(4,1fr)] gap-x-0.5 text-center">
+                <span className="text-[7px] font-bold">3P</span>
+                {renderTeamFoulCells(getTeamFoulValue(team, 3))}
+                <span className="text-[7px] font-bold">4P</span>
+                {renderTeamFoulCells(getTeamFoulValue(team, 4))}
               </div>
             </div>
           </div>
         </div>
-        <div className="border border-black p-2">
-          <div className="font-bold mb-1">チームファウル</div>
-          <div className="grid grid-cols-2 gap-2 text-[8px]">
-            <div>
-              <span className="font-bold">チームA:</span>
-              <div className="flex gap-1 mt-0.5">
-                {[0, 1, 2, 3].map(q => (
-                  <span key={q}>Q{q+1}: {state.teamA.teamFouls[q]?.[0] || 0}</span>
-                ))}
-              </div>
-            </div>
-            <div>
-              <span className="font-bold">チームB:</span>
-              <div className="flex gap-1 mt-0.5">
-                {[0, 1, 2, 3].map(q => (
-                  <span key={q}>Q{q+1}: {state.teamB.teamFouls[q]?.[0] || 0}</span>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
 
-      {/* スコアサマリー */}
-      <div className="border border-black mb-2">
-        <table className="w-full text-center">
+        <table className="w-full table-fixed text-[8px]">
           <thead>
-            <tr className="bg-gray-200">
-              <th className="border-r border-black p-1">チーム</th>
-              <th className="border-r border-black p-1">1Q</th>
-              <th className="border-r border-black p-1">2Q</th>
-              <th className="border-r border-black p-1">前半</th>
-              <th className="border-r border-black p-1">3Q</th>
-              <th className="border-r border-black p-1">4Q</th>
-              <th className="border-r border-black p-1">後半</th>
-              <th className="border-r border-black p-1">OT</th>
-              <th className="p-1 font-bold">合計</th>
+            <tr className="border-b border-black">
+              <th className="w-[22px] border-r border-black px-0.5 py-0.5">選</th>
+              <th className="border-r border-black px-0.5 py-0.5">手 氏 名</th>
+              <th className="w-[22px] border-r border-black px-0.5 py-0.5">No</th>
+              <th className="w-[18px] border-r border-black px-0.5 py-0.5">C</th>
+              <th className="w-[76px] px-0.5 py-0.5">ファウル</th>
             </tr>
           </thead>
           <tbody>
-            <tr className="border-t border-black">
-              <td className="border-r border-black p-1 font-bold">{state.teamA.name || "A"}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("A", 1)}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("A", 2)}</td>
-              <td className="border-r border-black p-1 bg-gray-100">{getQuarterScore("A", 1) + getQuarterScore("A", 2)}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("A", 3)}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("A", 4)}</td>
-              <td className="border-r border-black p-1 bg-gray-100">{getQuarterScore("A", 3) + getQuarterScore("A", 4)}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("A", 5)}</td>
-              <td className="p-1 font-bold text-lg">{totalScoreA}</td>
-            </tr>
-            <tr className="border-t border-black">
-              <td className="border-r border-black p-1 font-bold">{state.teamB.name || "B"}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("B", 1)}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("B", 2)}</td>
-              <td className="border-r border-black p-1 bg-gray-100">{getQuarterScore("B", 1) + getQuarterScore("B", 2)}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("B", 3)}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("B", 4)}</td>
-              <td className="border-r border-black p-1 bg-gray-100">{getQuarterScore("B", 3) + getQuarterScore("B", 4)}</td>
-              <td className="border-r border-black p-1">{getQuarterScore("B", 5)}</td>
-              <td className="p-1 font-bold text-lg">{totalScoreB}</td>
-            </tr>
+            {rows.map((player, idx) => (
+              <tr key={`${team}-${idx}`} className="h-[14px] border-b border-black">
+                <td className="border-r border-black px-0.5 text-center">{idx + 1}</td>
+                <td className="border-r border-black px-1">{toDisplay(player.name)}</td>
+                <td className="border-r border-black px-0.5 text-center font-mono">{toDisplay(player.number)}</td>
+                <td className="border-r border-black px-0.5 text-center">{player.isCaptain ? "●" : ""}</td>
+                <td className="px-0.5 text-center">{renderFoulsPrint(player.fouls)}</td>
+              </tr>
+            ))}
           </tbody>
         </table>
-      </div>
 
-      {/* 審判・オフィシャルズ */}
-      <div className="border border-black p-2 text-[8px]">
-        <div className="grid grid-cols-4 gap-2">
-          <div><span className="font-bold">クルーチーフ: </span>{state.officials.crewChief}</div>
-          <div><span className="font-bold">アンパイア1: </span>{state.officials.umpire1}</div>
-          <div><span className="font-bold">アンパイア2: </span>{state.officials.umpire2}</div>
-          <div><span className="font-bold">スコアラー: </span>{state.officials.scorer}</div>
-          <div><span className="font-bold">Aスコアラー: </span>{state.officials.assistantScorer}</div>
-          <div><span className="font-bold">タイマー: </span>{state.officials.timer}</div>
-          <div><span className="font-bold">24秒: </span>{state.officials.shotClockOperator}</div>
+        <div className="grid grid-cols-[1fr_64px] border-b border-black text-[8px]">
+          <div className="border-r border-black px-1 py-0.5">
+            コーチ：{toDisplay(teamData.coach)}
+            <br />
+            Aコーチ：{toDisplay(teamData.assistantCoach)}
+          </div>
+          <div className="px-1 py-0.5">サイン</div>
         </div>
       </div>
+    )
+  }
 
-      {/* 勝者 */}
-      <div className="mt-2 text-center font-bold text-sm border-2 border-black p-2">
-        勝者: {state.winner === "A" ? state.teamA.name || "チームA" : state.winner === "B" ? state.teamB.name || "チームB" : "―"}
-        {state.winner && (
-          <span className="ml-4">
-            最終スコア: {totalScoreA} - {totalScoreB}
-          </span>
-        )}
+  return (
+    <div className="print-score-sheet bg-white p-0 text-black text-[9px] leading-tight">
+      <div className="border border-black">
+        <div className="px-2 pt-1 text-center text-[11px] font-bold italic tracking-widest">
+          OFFICIAL SCORE SHEET
+        </div>
+        <div className="grid grid-cols-[1fr_1fr] gap-x-2 border-b border-black px-2 pb-1 pt-0.5 text-[10px]">
+          <div>チーム A：{toDisplay(state.teamA.name)}</div>
+          <div>チーム B：{toDisplay(state.teamB.name)}</div>
+        </div>
+
+        <div className="grid grid-cols-[1fr_1fr] border-b border-black">
+          <div className="border-r border-black">
+            <div className="grid grid-cols-[66px_1fr_54px_54px] border-b border-black text-[9px]">
+              <div className="border-r border-black px-1 py-0.5 font-bold">大会名</div>
+              <div className="border-r border-black px-1 py-0.5">{toDisplay(state.gameInfo.tournamentName)}</div>
+              <div className="border-r border-black px-1 py-0.5 text-center font-bold">場所</div>
+              <div className="px-1 py-0.5">{toDisplay(state.gameInfo.venue)}</div>
+            </div>
+            <div className="grid grid-cols-[66px_1fr_54px_54px_54px] text-[9px]">
+              <div className="border-r border-black px-1 py-0.5 font-bold">ゲーム No.</div>
+              <div className="border-r border-black px-1 py-0.5">{toDisplay(state.gameInfo.gameNumber)}</div>
+              <div className="border-r border-black px-1 py-0.5 text-center font-bold">日付</div>
+              <div className="border-r border-black px-1 py-0.5 text-center">{toDisplay(state.gameInfo.date)}</div>
+              <div className="px-1 py-0.5 text-center">
+                時間 {normalizeQuarterMinutes(state.gameInfo.quarterMinutes)}
+              </div>
+            </div>
+          </div>
+
+          <div className="text-[9px]">
+            <div className="border-b border-black px-1 py-0.5 text-center font-bold tracking-[0.3em]">
+              ランニング・スコア
+            </div>
+            <div className="grid grid-cols-4">
+              {runningBlocks.map((block, idx) => (
+                <div key={`running-head-${idx}`} className={cn("border-black", idx < 3 && "border-r")}>
+                  <div className="grid grid-cols-3 border-b border-black text-center text-[8px] font-bold">
+                    <div className="border-r border-black">A</div>
+                    <div className="border-r border-black">B</div>
+                    <div>{block[0]}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[1fr_1fr]">
+          <div className="border-r border-black">
+            {renderTeamPanel("A")}
+            {renderTeamPanel("B")}
+          </div>
+
+          <div className="border-b border-black">
+            <div className="grid grid-cols-4 text-[7px]">
+              {runningBlocks.map((colPoints, blockIdx) => (
+                <div
+                  key={`running-${blockIdx}`}
+                  className={cn("min-w-0 border-black", blockIdx < 3 && "border-r")}
+                >
+                  <div className="grid grid-cols-[1fr_1fr_1fr_1fr] border-b border-black text-center font-bold">
+                    <div className="border-r border-black py-[1px]">A</div>
+                    <div className="border-r border-black py-[1px]">点</div>
+                    <div className="border-r border-black py-[1px]">B</div>
+                    <div className="py-[1px]">点</div>
+                  </div>
+
+                  {colPoints.map((point) => {
+                    const metaA = getRunningCellMeta(state.scoreEntries, "A", point)
+                    const metaB = getRunningCellMeta(state.scoreEntries, "B", point)
+                    const sepStyleA = quarterLineStylesA.get(point)
+                    const sepStyleB = quarterLineStylesB.get(point)
+                    const gameDone = Boolean(state.winner)
+                    const endA = gameDone && point === totalScoreA && totalScoreA + totalScoreB > 0
+                    const endB = gameDone && point === totalScoreB && totalScoreA + totalScoreB > 0
+                    const bottomA = endA
+                      ? "border-b-2 border-double border-black"
+                      : sepStyleA
+                        ? quarterSeparatorBottomClassPrint(sepStyleA)
+                        : "border-b border-black"
+                    const bottomB = endB
+                      ? "border-b-2 border-double border-black"
+                      : sepStyleB
+                        ? quarterSeparatorBottomClassPrint(sepStyleB)
+                        : "border-b border-black"
+
+                    const hideScoreMidVertical = Boolean(sepStyleA || sepStyleB) || endA || endB
+
+                    const renderScore = (meta: ReturnType<typeof getRunningCellMeta>, qEnd: boolean) => {
+                      if (!meta) {
+                        return <span className="text-gray-400">{point}</span>
+                      }
+                      if (meta.hideJerseyAndScore) {
+                        return (
+                          <span className={cn("font-mono text-[7px] leading-none", getQuarterColor(meta.quarter))}>
+                            {point}
+                          </span>
+                        )
+                      }
+                      const fillBg = meta.quarter === 1 || meta.quarter === 3 ? "bg-red-600" : "bg-black"
+                      if (meta.showSlash) {
+                        return (
+                          <span
+                            className={cn(
+                              "relative inline-flex min-h-[0.65rem] min-w-[0.65rem] items-center justify-center overflow-visible font-mono font-semibold",
+                              getQuarterColor(meta.quarter),
+                              qEnd && "rounded-full border-[1.5px] border-current px-[1px]"
+                            )}
+                          >
+                            <svg
+                              className="pointer-events-none absolute left-1/2 top-1/2 z-[5] h-[10px] w-[10px] -translate-x-1/2 -translate-y-1/2 text-current"
+                              viewBox="0 0 32 32"
+                              aria-hidden
+                            >
+                              <line
+                                x1="4"
+                                y1="28"
+                                x2="28"
+                                y2="4"
+                                stroke="currentColor"
+                                strokeWidth="3"
+                                strokeLinecap="square"
+                              />
+                            </svg>
+                            <span className="relative z-10">{point}</span>
+                          </span>
+                        )
+                      }
+                      if (meta.showFilledCircle) {
+                        return (
+                          <span
+                            className={cn(
+                              "inline-flex rounded-full",
+                              getQuarterColor(meta.quarter),
+                              qEnd && "border-[1.5px] border-current p-[0.5px]"
+                            )}
+                          >
+                            <span
+                              className={cn(
+                                "inline-flex min-h-[10px] min-w-[10px] items-center justify-center rounded-full font-mono text-[6px] font-bold leading-none text-white",
+                                fillBg
+                              )}
+                            >
+                              {point}
+                            </span>
+                          </span>
+                        )
+                      }
+                      return <span className="select-none" />
+                    }
+
+                    return (
+                      <div
+                        key={`p-${point}`}
+                        className="grid h-[5.6mm] grid-cols-[1fr_1fr_1fr_1fr] text-center leading-none"
+                      >
+                        <div className={cn("flex items-center justify-center border-r border-black font-mono", bottomA)}>
+                          {metaA?.hideJerseyAndScore ? (
+                            <span className="select-none" />
+                          ) : metaA?.circleJersey ? (
+                            <span
+                              className={cn(
+                                "inline-flex min-h-[9px] min-w-[9px] items-center justify-center rounded-full border border-current font-mono text-[6px] font-bold",
+                                getQuarterColor(metaA.quarter)
+                              )}
+                            >
+                              {metaA.playerNumber}
+                            </span>
+                          ) : metaA ? (
+                            <span className={cn("text-[6px]", getQuarterColor(metaA.quarter))}>{metaA.playerNumber}</span>
+                          ) : (
+                            <span className="text-transparent">.</span>
+                          )}
+                        </div>
+                        <div
+                          className={cn(
+                            "flex items-center justify-center",
+                            !hideScoreMidVertical && "border-r border-black",
+                            bottomA
+                          )}
+                        >
+                          {renderScore(metaA, qEndA.has(point))}
+                        </div>
+                        <div className={cn("flex items-center justify-center border-r border-black", bottomB)}>
+                          {renderScore(metaB, qEndB.has(point))}
+                        </div>
+                        <div className={cn("flex items-center justify-center font-mono", bottomB)}>
+                          {metaB?.hideJerseyAndScore ? (
+                            <span className="select-none" />
+                          ) : metaB?.circleJersey ? (
+                            <span
+                              className={cn(
+                                "inline-flex min-h-[9px] min-w-[9px] items-center justify-center rounded-full border border-current font-mono text-[6px] font-bold",
+                                getQuarterColor(metaB.quarter)
+                              )}
+                            >
+                              {metaB.playerNumber}
+                            </span>
+                          ) : metaB ? (
+                            <span className={cn("text-[6px]", getQuarterColor(metaB.quarter))}>{metaB.playerNumber}</span>
+                          ) : (
+                            <span className="text-transparent">.</span>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-[1fr_1fr] border-b border-black text-[9px]">
+          <div className="border-r border-black">
+            <div className="grid grid-cols-[120px_1fr] border-b border-black">
+              <div className="border-r border-black px-1 py-0.5">スコアラー</div>
+              <div className="px-1 py-0.5">{toDisplay(state.officials.scorer)}</div>
+            </div>
+            <div className="grid grid-cols-[120px_1fr] border-b border-black">
+              <div className="border-r border-black px-1 py-0.5">A スコアラー</div>
+              <div className="px-1 py-0.5">{toDisplay(state.officials.assistantScorer)}</div>
+            </div>
+            <div className="grid grid-cols-[120px_1fr] border-b border-black">
+              <div className="border-r border-black px-1 py-0.5">タイマー</div>
+              <div className="px-1 py-0.5">{toDisplay(state.officials.timer)}</div>
+            </div>
+            <div className="grid grid-cols-[120px_1fr] border-b border-black">
+              <div className="border-r border-black px-1 py-0.5">24 秒オペレイター</div>
+              <div className="px-1 py-0.5">{toDisplay(state.officials.shotClockOperator)}</div>
+            </div>
+            <div className="grid grid-cols-[120px_1fr] border-b border-black">
+              <div className="border-r border-black px-1 py-0.5">主 審</div>
+              <div className="px-1 py-0.5">{toDisplay(state.officials.crewChief)}</div>
+            </div>
+            <div className="grid grid-cols-[120px_1fr]">
+              <div className="border-r border-black px-1 py-0.5">副 審</div>
+              <div className="px-1 py-0.5">
+                {toDisplay(state.officials.umpire1)}
+                {state.officials.umpire2 ? ` / ${state.officials.umpire2}` : ""}
+              </div>
+            </div>
+          </div>
+
+          <div>
+            <table className="w-full table-fixed text-center text-[9px]">
+              <tbody>
+                <tr className="border-b border-black">
+                  <td className="w-[90px] border-r border-black px-1 py-0.5">第 1 ピリオド</td>
+                  <td className="border-r border-black px-1 py-0.5">A</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("A", 1)}</td>
+                  <td className="border-r border-black px-1 py-0.5">-</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("B", 1)}</td>
+                  <td className="px-1 py-0.5">B</td>
+                </tr>
+                <tr className="border-b border-black">
+                  <td className="border-r border-black px-1 py-0.5">第 2 ピリオド</td>
+                  <td className="border-r border-black px-1 py-0.5">A</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("A", 2)}</td>
+                  <td className="border-r border-black px-1 py-0.5">-</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("B", 2)}</td>
+                  <td className="px-1 py-0.5">B</td>
+                </tr>
+                <tr className="border-b border-black">
+                  <td className="border-r border-black px-1 py-0.5">第 3 ピリオド</td>
+                  <td className="border-r border-black px-1 py-0.5">A</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("A", 3)}</td>
+                  <td className="border-r border-black px-1 py-0.5">-</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("B", 3)}</td>
+                  <td className="px-1 py-0.5">B</td>
+                </tr>
+                <tr className="border-b border-black">
+                  <td className="border-r border-black px-1 py-0.5">第 4 ピリオド</td>
+                  <td className="border-r border-black px-1 py-0.5">A</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("A", 4)}</td>
+                  <td className="border-r border-black px-1 py-0.5">-</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("B", 4)}</td>
+                  <td className="px-1 py-0.5">B</td>
+                </tr>
+                <tr className="border-b border-black">
+                  <td className="border-r border-black px-1 py-0.5">延 長</td>
+                  <td className="border-r border-black px-1 py-0.5">A</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("A", 5)}</td>
+                  <td className="border-r border-black px-1 py-0.5">-</td>
+                  <td className="border-r border-black px-1 py-0.5">{getQuarterScore("B", 5)}</td>
+                  <td className="px-1 py-0.5">B</td>
+                </tr>
+                <tr>
+                  <td className="border-r border-black px-1 py-0.5 font-bold">最終スコア 勝者</td>
+                  <td className="border-r border-black px-1 py-0.5 font-bold">A</td>
+                  <td className="border-r border-black px-1 py-0.5 font-bold">{totalScoreA}</td>
+                  <td className="border-r border-black px-1 py-0.5 font-bold">-</td>
+                  <td className="border-r border-black px-1 py-0.5 font-bold">{totalScoreB}</td>
+                  <td className="px-1 py-0.5 font-bold">B</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </div>
   )

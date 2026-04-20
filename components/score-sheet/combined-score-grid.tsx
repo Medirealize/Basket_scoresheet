@@ -256,7 +256,8 @@ export function CombinedScoreGrid() {
       )
     }
 
-    return null
+    // 2P/3Pの途中点も「得点列の数字」は残す
+    return <span className={cn("font-mono text-[10px] tabular-nums leading-none", color)}>{point}</span>
   }
 
   const cellBtn =
@@ -372,9 +373,7 @@ export function CombinedScoreGrid() {
                     )}
                     onClick={() => clickableA && handleTeamClick(point, "A")}
                   >
-                    {metaA?.hideJerseyAndScore ? null : (
-                      <RunningScoreDigit point={point} meta={metaA} isQuarterEnd={qEndA} />
-                    )}
+                    <RunningScoreDigit point={point} meta={metaA} isQuarterEnd={qEndA} />
                   </button>
                 </td>
                 <td
@@ -394,9 +393,7 @@ export function CombinedScoreGrid() {
                       if (clickableB) handleTeamClick(point, "B")
                     }}
                   >
-                    {metaB?.hideJerseyAndScore ? null : (
-                      <RunningScoreDigit point={point} meta={metaB} isQuarterEnd={qEndB} />
-                    )}
+                    <RunningScoreDigit point={point} meta={metaB} isQuarterEnd={qEndB} />
                   </button>
                 </td>
                 <td

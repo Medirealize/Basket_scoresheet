@@ -213,8 +213,16 @@ export function FinalResultPanel() {
 
       {/* 印刷用ダイアログ */}
       <Dialog open={printDialogOpen} onOpenChange={setPrintDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto print:max-w-none print:max-h-none print:overflow-visible">
-          <DialogHeader className="print:hidden">
+        <DialogContent
+          showCloseButton={false}
+          className={cn(
+            "print-dialog-content",
+            /* 画面でも全面白（上下の隙間で背面の最終結果が見えない） */
+            "inset-0 top-0 left-0 flex h-[100dvh] max-h-[100dvh] w-full max-w-full translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden rounded-none border-0 p-4 sm:p-6 sm:max-w-full",
+            "print:overflow-visible print:p-0",
+          )}
+        >
+          <DialogHeader className="print:hidden shrink-0">
             <div className="flex items-center gap-3">
               <Button 
                 variant="ghost" 
@@ -227,10 +235,10 @@ export function FinalResultPanel() {
               <DialogTitle>印刷プレビュー</DialogTitle>
             </div>
           </DialogHeader>
-          <div className="print:block">
+          <div className="print-root min-h-0 flex-1 overflow-y-auto print:block print:min-h-0 print:flex-none print:overflow-visible">
             <PrintScoreSheet />
           </div>
-          <div className="flex justify-between gap-2 print:hidden sticky bottom-0 bg-background pt-4 border-t">
+          <div className="flex shrink-0 justify-between gap-2 border-t bg-background pt-4 print:hidden">
             <Button variant="outline" onClick={() => setPrintDialogOpen(false)}>
               <ArrowLeft className="h-4 w-4 mr-2" />
               戻る
