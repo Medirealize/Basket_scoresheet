@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { cn } from "@/lib/utils"
+import { logEvent } from "@/lib/event-logger"
 import { Trophy, Download, Printer, ArrowLeft } from "lucide-react"
 import { PrintScoreSheet } from "./print-score-sheet"
 
@@ -35,6 +36,16 @@ export function FinalResultPanel() {
   }))
 
   const handleExport = () => {
+    void logEvent({
+      eventType: "export_json",
+      screen: "result",
+      payload: {
+        date: state.gameInfo.date || null,
+        teamA: state.teamA.name || null,
+        teamB: state.teamB.name || null,
+      },
+    })
+
     const data = {
       試合情報: state.gameInfo,
       チームA: {
@@ -77,6 +88,15 @@ export function FinalResultPanel() {
   }
 
   const handlePrint = () => {
+    void logEvent({
+      eventType: "open_print_preview",
+      screen: "result",
+      payload: {
+        scoreA,
+        scoreB,
+      },
+    })
+
     setPrintDialogOpen(true)
     setTimeout(() => {
       window.print()

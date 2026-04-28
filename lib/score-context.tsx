@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, type ReactNode } from "react"
 import { normalizeQuarterMinutes } from "@/lib/timeout-sheet"
+import { logEvent } from "@/lib/event-logger"
 
 export type FoulType = "P" | "P1" | "P2" | "P3" | "T" | "T1" | "U" | "U1" | "U2" | "D" | "C" | "B" | "GD" | ""
 
@@ -211,6 +212,20 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
   }
 
   const addScore = (team: "A" | "B", playerNumber: string, points: number, isThreePointer?: boolean, isFreeThrow?: boolean) => {
+    const quarter = state.currentQuarter
+    void logEvent({
+      eventType: "add_score",
+      screen: "score",
+      team,
+      payload: {
+        quarter,
+        playerNumber,
+        points,
+        isThreePointer: isThreePointer ?? points === 3,
+        isFreeThrow: isFreeThrow ?? false,
+      },
+    })
+
     setState((prev) => {
       const currentEntries = prev.scoreEntries.filter(
         (e) => e.team === team && e.quarter === prev.currentQuarter
@@ -256,6 +271,14 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
   }
 
   const removeLastScore = (team: "A" | "B") => {
+    const quarter = state.currentQuarter
+    void logEvent({
+      eventType: "remove_last_score",
+      screen: "score",
+      team,
+      payload: { quarter },
+    })
+
     setState((prev) => {
       const entries = [...prev.scoreEntries]
       const lastIndex = entries.findLastIndex(
@@ -275,6 +298,14 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
   }
 
   const addFoul = (team: "A" | "B", playerIndex: number, foulType: FoulType) => {
+    const quarter = state.currentQuarter
+    void logEvent({
+      eventType: "add_foul",
+      screen: "players",
+      team,
+      payload: { quarter, playerIndex, foulType },
+    })
+
     setState((prev) => {
       const teamKey = team === "A" ? "teamA" : "teamB"
       const newPlayers = [...prev[teamKey].players]
@@ -289,6 +320,14 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
   }
 
   const removeFoul = (team: "A" | "B", playerIndex: number) => {
+    const quarter = state.currentQuarter
+    void logEvent({
+      eventType: "remove_foul",
+      screen: "players",
+      team,
+      payload: { quarter, playerIndex },
+    })
+
     setState((prev) => {
       const teamKey = team === "A" ? "teamA" : "teamB"
       const newPlayers = [...prev[teamKey].players]
@@ -303,6 +342,13 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
   }
 
   const useTimeout = (team: "A" | "B", half: number, index: number, time: string, quarter: number) => {
+    void logEvent({
+      eventType: "use_timeout",
+      screen: "score",
+      team,
+      payload: { half, index, time, quarter },
+    })
+
     setState((prev) => {
       const teamKey = team === "A" ? "teamA" : "teamB"
       const newTimeouts = [...prev[teamKey].timeouts]
@@ -327,6 +373,13 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
   }
 
   const cancelTimeout = (team: "A" | "B", half: number, index: number) => {
+    void logEvent({
+      eventType: "cancel_timeout",
+      screen: "score",
+      team,
+      payload: { half, index },
+    })
+
     setState((prev) => {
       const teamKey = team === "A" ? "teamA" : "teamB"
       const newTimeouts = [...prev[teamKey].timeouts]
@@ -351,6 +404,12 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
   }
 
   const setCurrentQuarter = (quarter: number) => {
+    void logEvent({
+      eventType: "set_current_quarter",
+      screen: "score",
+      payload: { quarter },
+    })
+
     setState((prev) => ({ ...prev, currentQuarter: quarter }))
   }
 
@@ -367,6 +426,12 @@ export function ScoreProvider({ children }: { children: ReactNode }) {
   }
 
   const setWinner = (winner: string) => {
+    void logEvent({
+      eventType: "set_winner",
+      screen: "result",
+      payload: { winner },
+    })
+
     setState((prev) => ({ ...prev, winner }))
   }
 
